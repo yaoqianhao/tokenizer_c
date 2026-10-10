@@ -1,0 +1,23 @@
+FAIL [tests/test_tokenizer.c:112] encode succeeds
+  encode err[0] 'hello world': tokenizer_encode: unreachable state
+FAIL [tests/test_tokenizer.c:112] encode succeeds
+  encode err[1] '机器学习 测试': tokenizer_encode: unreachable state
+  encode err[2] 'the quick brown fox': tokenizer_encode: unreachable state
+  encode err[3] '你好': tokenizer_encode: unreachable state
+FAIL [tests/test_tokenizer.c:112] encode succeeds
+  encode err[4] 'hello 世界 tokenizer': tokenizer_encode: unreachable state
+FAIL [tests/test_tokenizer.c:112] encode succeeds
+  encode err[5] 'ＡＢＣ １２３': tokenizer_encode: unreachable state
+FAIL [tests/test_tokenizer.c:112] encode succeeds
+  encode err[6] 'abc XYZ 123': tokenizer_encode: unreachable state
+FAIL [tests/test_tokenizer.c:140] encode rare text succeeds
+FAIL [tests/test_tokenizer.c:142] rare text yields tokens
+FAIL [tests/test_tokenizer.c:166] encode arbitrary bytes succeeds
+FAIL [tests/test_tokenizer.c:200] json contains Unigram type
+FAIL [tests/test_tokenizer.c:269] sp load succeeds
+FAIL [tests/test_tokenizer.c:302] tokenizer_load dispatches .model extension
+FAIL [tests/test_tokenizer.c:366] nfkc mapping correct
+  nfkc in='℮' want='e' got='℮'
+FAIL [tests/test_tokenizer.c:381] nfkc legacy whitespace mapping
+  legacy in='hello 世界' got='hello 世界 '
+FAILED: 13/72 checks failed
