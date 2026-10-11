@@ -2,12 +2,14 @@
 AIGC:
     Label: "1"
     ContentProducer: 001191440300708461136T1XGW3
-    ProduceID: 04526fdd866a8c5c9aceee6b83ed2c05_7622a760c3dd11f1a08152540064ee0f
-    ReservedCode1: PINr7X+nAJuldkAXwVzzZmHUthse0LsVS+poahgZZ3heSg3jI3vZDu3na9L8d8vD/urpqFoYZ1flBIJKmHFiefLC/TnoMpMUsAl3M/YjfUs024qFjo9qMwv/xV8k7ooSocTEPyfntF4SZPcDcCpsv7UG61sb9VJXdPI1eV0hsKdapxyGtAljpOrOnRk=
+    ProduceID: 04526fdd866a8c5c9aceee6b83ed2c05_2eff9b30c50911f1820a525400638852
+    ReservedCode1: rQcqIJyMXBkq3tKouD6hKr8b+pu09lyuN4MW9pDtMf2c+WpxONUsj6ESwpAUTaUffMwIGu9rvfhvXtxTJfVs/JooVUMQgXFWQAFlvf7RKVHF8f8XLIxaR3TexG3dmRZQpkMLdNRs5/TtA4xqwpSlYS0TdBYJCfRtOXn7x7ImpXtCHUs0mKPemyEC/Bk=
     ContentPropagator: 001191440300708461136T1XGW3
-    PropagateID: 04526fdd866a8c5c9aceee6b83ed2c05_7622a760c3dd11f1a08152540064ee0f
-    ReservedCode2: PINr7X+nAJuldkAXwVzzZmHUthse0LsVS+poahgZZ3heSg3jI3vZDu3na9L8d8vD/urpqFoYZ1flBIJKmHFiefLC/TnoMpMUsAl3M/YjfUs024qFjo9qMwv/xV8k7ooSocTEPyfntF4SZPcDcCpsv7UG61sb9VJXdPI1eV0hsKdapxyGtAljpOrOnRk=
+    PropagateID: 04526fdd866a8c5c9aceee6b83ed2c05_2eff9b30c50911f1820a525400638852
+    ReservedCode2: rQcqIJyMXBkq3tKouD6hKr8b+pu09lyuN4MW9pDtMf2c+WpxONUsj6ESwpAUTaUffMwIGu9rvfhvXtxTJfVs/JooVUMQgXFWQAFlvf7RKVHF8f8XLIxaR3TexG3dmRZQpkMLdNRs5/TtA4xqwpSlYS0TdBYJCfRtOXn7x7ImpXtCHUs0mKPemyEC/Bk=
 ---
+
+
 
 # tokenizer-c — 工业级 Unigram Tokenizer（纯 C 实现）
 
@@ -493,9 +495,27 @@ python benchmark\eval_metrics.py ^
 |---|---|---|
 | P0 | OOV 率恒为 0 | ✅ 通过（byte-fallback 覆盖全部 UTF-8 字节） |
 | P0 | 还原率 100%（字节级） | ⚠️ 部分通过：en/code 100%；zh 因完整 NFKC 归一化（全角标点→半角）字节级非 100%，语义等价（NFKC 归一化行为，见 §12.7） |
-| P1 | BPT ≤ SentencePiece 基线 98% | 📊 已测：overall 7.4881（zh 2.6855 chars/token，中文压缩最优）；SP 基线待补测 |
+| P1 | BPT ≤ SentencePiece 基线 98% | ⚠️ 未达标：项目 overall 7.4881 vs SP 基线 5.8653（=127.7%）。分语种：code 7.2127 vs 4.5740、en 7.3988 vs 5.7108、zh 7.9345 vs 8.6622（zh 领先 8.4%）。差距集中在 code/en，见 §13.6 SP 基线补测 |
 | P2 | 稳定性 > 0.95 | ❌ 未达标：overall 0.7090（code 0.6284 / en 0.6632 / zh 0.8354），短序列 Jaccard 对扰动敏感，待改进 |
 | P3 | UTF-8 完整性 1.0、跨边界 0 | ✅ 通过（三语种 utf8_completeness=1.0，boundary_crossing=0） |
 | P4 | 编码吞吐 ≥ 设计目标 | ✅ 已测：encode 90,310.8 t/s、decode 7,293.1 t/s（目标值以方案文档为准） |
 
+### 13.6 SP 基线补测（P1 对比，2026-10-11）
+
+补测方法：用官方 SentencePiece（0.2.2）在**同一训练语料** `benchmark/corpus_64mb.txt`（67.1MB / 728,189 句）上训练 262,144 词表 Unigram 模型（`--model_type=unigram --normalization_rule_name=nfkc --character_coverage=0.9995 --hard_vocab_limit=true`，与项目 256K 模型训练口径一致），再由 `tok-cli.exe` 以同一套 `eval_metrics.py` 对同一评测语料 `benchmark/corpus/` 全量评测。
+
+| 语种 | 项目 BPT | SP 基线 BPT | 项目/基线 |
+|---|---|---|---|
+| code | 7.2127 | 4.5740 | 157.7% |
+| en | 7.3988 | 5.7108 | 129.6% |
+| zh | 7.9345 | 8.6622 | 91.6% |
+| **overall** | **7.4881** | **5.8653** | **127.7%** |
+
+其他基线观测（SP 262144）：roundtrip en/code 100%、zh 非 100%（同 NFKC 语义等价问题）；stability overall ≈0.8617（code 0.8653 / en 0.8177 / zh 0.9021）；OOV=0；UTF-8 完整性 0.9957、跨边界 0；encode 1,252,416.5 t/s、decode 9,829.7 t/s。
+
+结论与改进方向：
+- **zh 领先**：项目对中文压缩更优（zh BPT 8.4% 优于 SP），与「zh 2.6855 chars/token，中文压缩最优」一致。
+- **code/en 落后**：差距主因是训练收敛轮数不同（项目 10 轮 EM vs SP 默认 2 轮 EM 子迭代）与候选词表剪枝策略差异；建议提高 `--iters`/降低 `--shrink` 或扩充 code/en 语料占比后重训，目标 overall ≤ SP×98%（即 ≤ 5.748）。
+
+*（内容由AI生成，仅供参考）*
 *（内容由AI生成，仅供参考）*
