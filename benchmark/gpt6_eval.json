@@ -1,0 +1,139 @@
+{
+  "date": "2026-10-11",
+  "model_dir": "E:\\qwen-distill\\models\\gpt6",
+  "vocab_size": 199998,
+  "langs": {
+    "code": {
+      "files": [
+        "code.txt"
+      ],
+      "bytes": 10641181,
+      "tokens": 2499254,
+      "bpt": 4.257743,
+      "chars_per_token": 4.257743,
+      "roundtrip_ok": true,
+      "roundtrip_mismatches": 0,
+      "roundtrip_lines": 200,
+      "stability": 0.743939,
+      "oov_rate": 0.0,
+      "byte_fallback_rate": 0.0,
+      "tokeval": {
+        "utf8": {
+          "utf8_completeness": 1.0,
+          "char_split_rate": null,
+          "boundary_crossing_rate": 0.0,
+          "tokens": 5530,
+          "multibyte_chars": 0
+        },
+        "digit": {
+          "digit_boundary_f1": 0.0,
+          "digit_split_variability": 0.0,
+          "digit_spans": 30,
+          "digit_skipped": 0
+        },
+        "operator": {
+          "operator_isolation": 0.333333,
+          "operator_occurrences": 30,
+          "operator_skipped": 0
+        }
+      }
+    },
+    "en": {
+      "files": [
+        "en.txt"
+      ],
+      "bytes": 15900854,
+      "tokens": 2597712,
+      "bpt": 6.1211,
+      "chars_per_token": 6.1211,
+      "roundtrip_ok": true,
+      "roundtrip_mismatches": 0,
+      "roundtrip_lines": 200,
+      "stability": 0.76098,
+      "oov_rate": 0.0,
+      "byte_fallback_rate": 0.0,
+      "tokeval": {
+        "utf8": {
+          "utf8_completeness": 1.0,
+          "char_split_rate": null,
+          "boundary_crossing_rate": 0.0,
+          "tokens": 4338,
+          "multibyte_chars": 0
+        },
+        "digit": {
+          "digit_boundary_f1": null,
+          "digit_split_variability": null,
+          "digit_spans": 0,
+          "digit_skipped": 0
+        },
+        "operator": {
+          "operator_isolation": 0.0,
+          "operator_occurrences": 30,
+          "operator_skipped": 0
+        }
+      }
+    },
+    "zh": {
+      "files": [
+        "zh.txt"
+      ],
+      "bytes": 10566465,
+      "tokens": 2424800,
+      "bpt": 4.357665,
+      "chars_per_token": 1.496926,
+      "roundtrip_ok": true,
+      "roundtrip_mismatches": 0,
+      "roundtrip_lines": 200,
+      "stability": 0.975859,
+      "oov_rate": 0.0,
+      "byte_fallback_rate": 0.0,
+      "tokeval": {
+        "utf8": {
+          "utf8_completeness": 1.0,
+          "char_split_rate": 0.997669,
+          "boundary_crossing_rate": 0.0,
+          "tokens": 8836,
+          "multibyte_chars": 429
+        },
+        "digit": {
+          "digit_boundary_f1": null,
+          "digit_split_variability": null,
+          "digit_spans": 0,
+          "digit_skipped": 0
+        },
+        "operator": {
+          "operator_isolation": null,
+          "operator_occurrences": 0,
+          "operator_skipped": 0
+        }
+      }
+    }
+  },
+  "totals": {
+    "bytes": 37108500,
+    "tokens": 7521766,
+    "bpt": 4.933482
+  },
+  "roundtrip_ok": true,
+  "tokeval": {
+    "utf8_completeness": 1.0,
+    "char_split_rate": 0.997669,
+    "boundary_crossing_rate": 0.0,
+    "digit_boundary_f1": 0.0,
+    "digit_split_variability": 0.0,
+    "operator_isolation": 0.166666
+  },
+  "stability": {
+    "per_lang": {
+      "code": 0.743939,
+      "en": 0.76098,
+      "zh": 0.975859
+    },
+    "overall": 0.826926
+  },
+  "throughput": {
+    "encode_tps": 512912.311,
+    "decode_tps": 7797183.518,
+    "load_ms": 0.204
+  }
+}

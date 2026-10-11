@@ -118,6 +118,11 @@ typedef struct tokenizer_train_options {
     int     verbose;           /* progress logging; 0 => off */
     /* Optional export */
     const char *json_path;   /* optional HF-style tokenizer.json export */
+    /* Optional checkpoint / resume */
+    const char *checkpoint_path; /* if set, save a per-round checkpoint after
+                                    each EM iteration; if a valid checkpoint
+                                    already exists at this path, training
+                                    resumes from it (skipping re-seeding) */
 } tokenizer_train_options;
 
 #define TOKENIZER_TRAIN_OPTIONS_DEFAULT { \
@@ -125,7 +130,7 @@ typedef struct tokenizer_train_options {
     /* vocab_size */ 0, /* max_piece_len */ 0, /* max_candidates */ 0, \
     /* max_iters */ 0, /* em_eps */ 0.0, /* shrink_pct */ 0, /* min_rounds */ 0, \
     /* add_byte_fallback */ 1, /* fold_case */ 0, /* verbose */ 0, \
-    /* json_path */ NULL \
+    /* json_path */ NULL, /* checkpoint_path */ NULL \
 }
 
 /* Train a Unigram model from a corpus and save it. Returns 0 on success. */

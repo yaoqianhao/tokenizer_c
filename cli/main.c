@@ -59,7 +59,7 @@ static void usage(void) {
         "    options: --vocab-size N --max-piece-len N --max-candidates N\n"
         "             --iters N --eps F --shrink PCT --min-rounds N\n"
         "             --no-byte-fallback --fold-case --json <out.json>\n"
-        "             --sp-model <out.model> -v\n"
+        "             --ckpt <file> --sp-model <out.model> -v\n"
         "  %s encode --model <file> (--text <text> | --file <in.txt>)\n"
         "  %s decode --model <file> --ids <id,id,...>\n",
         g_prog, g_prog, g_prog);
@@ -101,6 +101,10 @@ static int run_train(int argc, char **argv) {
             v = arg_value(argc, argv, i, "--sp-model", &next);
             if (!v) return 1;
             sp_model = v;
+        } else if (strcmp(argv[i], "--ckpt") == 0) {
+            v = arg_value(argc, argv, i, "--ckpt", &next);
+            if (!v) return 1;
+            opts.checkpoint_path = v;
         } else if (strcmp(argv[i], "--vocab-size") == 0) {
             v = arg_value(argc, argv, i, "--vocab-size", &next);
             if (!v) return 1;

@@ -397,6 +397,221 @@ static int viterbi_segment(const trie_t *trie, const int vocab_size,
 }
 
 /* ------------------------------------------------------------------ */
+/* checkpoint / resume (train can be interrupted & continued)          */
+/* ------------------------------------------------------------------ */
+#define CKPT_MAGIC "TKCH"
+#define CKPT_VERSION 1u
+
+/* Binary layout (little-endian native):
+ *   magic[4] + version(u32)
+ *   vocab_target(u64) max_piece_len(i32) max_candidates(i32)
+ *   max_iters(i32) em_eps(f64) shrink_pct(i32) min_rounds(i32)
+ *   add_fb(i32) fold_case(i32)
+ *   vsz(i32) round(i32) n_rounds_at_target(i32) prev_ll(f64)
+ *   for each piece: plen(i32) bytes float score
+ */
+static int ckpt_save(const tokenizer_train_options *opts, const char *path,
+                     int vsz, char **pieces, int *plens, float *scores,
+                     int round, int n_rounds_at_target, double prev_ll) {
+    char tmp[4096];
+    snprintf(tmp, sizeof(tmp), "%s.tmp", path);
+    FILE *fp = fopen(tmp, "wb");
+    if (!fp) {
+        tokenizer_set_error("train: cannot open checkpoint %s", tmp);
+        return -1;
+    }
+    fwrite(CKPT_MAGIC, 1, 4, fp);
+    uint32_t ver = CKPT_VERSION;
+    fwrite(&ver, 1, sizeof(ver), fp);
+    uint64_t vt = (uint64_t)(opts->vocab_size ? opts->vocab_size : 4096);
+    fwrite(&vt, 1, sizeof(vt), fp);
+    int32_t mpl = opts->max_piece_len ? opts->max_piece_len : 8;
+    fwrite(&mpl, 1, sizeof(mpl), fp);
+    int32_t mc = opts->max_candidates ? (int32_t)opts->max_candidates : 1000000;
+    fwrite(&mc, 1, sizeof(mc), fp);
+    int32_t mi = opts->max_iters ? opts->max_iters : 10;
+    fwrite(&mi, 1, sizeof(mi), fp);
+    double ee = opts->em_eps > 0 ? opts->em_eps : 1e-4;
+    fwrite(&ee, 1, sizeof(ee), fp);
+    int32_t sp = opts->shrink_pct ? opts->shrink_pct : 60;
+    fwrite(&sp, 1, sizeof(sp), fp);
+    int32_t mr = opts->min_rounds ? opts->min_rounds : 3;
+    fwrite(&mr, 1, sizeof(mr), fp);
+    int32_t af = opts->add_byte_fallback;
+    fwrite(&af, 1, sizeof(af), fp);
+    int32_t fc = opts->fold_case;
+    fwrite(&fc, 1, sizeof(fc), fp);
+    int32_t vs = (int32_t)vsz;
+    fwrite(&vs, 1, sizeof(vs), fp);
+    int32_t rd = (int32_t)round;
+    fwrite(&rd, 1, sizeof(rd), fp);
+    int32_t nr = (int32_t)n_rounds_at_target;
+    fwrite(&nr, 1, sizeof(nr), fp);
+    double pl = prev_ll;
+    fwrite(&pl, 1, sizeof(pl), fp);
+    for (int i = 0; i < vsz; i++) {
+        int32_t l = (int32_t)plens[i];
+        fwrite(&l, 1, sizeof(l), fp);
+        fwrite(pieces[i], 1, (size_t)l, fp);
+        fwrite(&scores[i], 1, sizeof(float), fp);
+    }
+    if (ferror(fp)) {
+        fclose(fp);
+        remove(tmp);
+        tokenizer_set_error("train: write error on checkpoint");
+        return -1;
+    }
+    if (fclose(fp) != 0) {
+        remove(tmp);
+        tokenizer_set_error("train: close error on checkpoint");
+        return -1;
+    }
+    /* Windows rename() cannot overwrite an existing file */
+    remove(path);
+    if (rename(tmp, path) != 0) {
+        remove(tmp);
+        tokenizer_set_error("train: cannot finalize checkpoint %s", path);
+        return -1;
+    }
+    return 0;
+}
+
+/* Returns 1 if a valid checkpoint exists at path (magic ok), 0 otherwise. */
+static int ckpt_exists(const char *path) {
+    if (!path || !*path) return 0;
+    FILE *fp = fopen(path, "rb");
+    if (!fp) return 0;
+    char magic[4];
+    int ok = (fread(magic, 1, 4, fp) == 4 && memcmp(magic, CKPT_MAGIC, 4) == 0);
+    fclose(fp);
+    return ok;
+}
+
+/* Load checkpoint; validates parameters against opts. On success caller
+ * owns pieces/plens/scores. Returns 0 on success, -1 on failure. */
+static int ckpt_load(const tokenizer_train_options *opts, const char *path,
+                     int *vsz_out, char ***pieces_out, int **plens_out,
+                     float **scores_out, int *round_out,
+                     int *n_rounds_at_target_out, double *prev_ll_out) {
+    FILE *fp = fopen(path, "rb");
+    if (!fp) {
+        tokenizer_set_error("train: cannot open checkpoint %s", path);
+        return -1;
+    }
+    char magic[4];
+    uint32_t ver;
+    uint64_t vt;
+    int32_t mpl, mc, mi, sp, mr, af, fc, vs, rd, nr;
+    double ee, pl;
+    size_t got = 0;
+    got += fread(magic, 1, 4, fp) == 4 ? 4 : 0;
+    got += fread(&ver, 1, sizeof(ver), fp) == sizeof(ver) ? sizeof(ver) : 0;
+    got += fread(&vt, 1, sizeof(vt), fp) == sizeof(vt) ? sizeof(vt) : 0;
+    got += fread(&mpl, 1, sizeof(mpl), fp) == sizeof(mpl) ? sizeof(mpl) : 0;
+    got += fread(&mc, 1, sizeof(mc), fp) == sizeof(mc) ? sizeof(mc) : 0;
+    got += fread(&mi, 1, sizeof(mi), fp) == sizeof(mi) ? sizeof(mi) : 0;
+    got += fread(&ee, 1, sizeof(ee), fp) == sizeof(ee) ? sizeof(ee) : 0;
+    got += fread(&sp, 1, sizeof(sp), fp) == sizeof(sp) ? sizeof(sp) : 0;
+    got += fread(&mr, 1, sizeof(mr), fp) == sizeof(mr) ? sizeof(mr) : 0;
+    got += fread(&af, 1, sizeof(af), fp) == sizeof(af) ? sizeof(af) : 0;
+    got += fread(&fc, 1, sizeof(fc), fp) == sizeof(fc) ? sizeof(fc) : 0;
+    got += fread(&vs, 1, sizeof(vs), fp) == sizeof(vs) ? sizeof(vs) : 0;
+    got += fread(&rd, 1, sizeof(rd), fp) == sizeof(rd) ? sizeof(rd) : 0;
+    got += fread(&nr, 1, sizeof(nr), fp) == sizeof(nr) ? sizeof(nr) : 0;
+    got += fread(&pl, 1, sizeof(pl), fp) == sizeof(pl) ? sizeof(pl) : 0;
+    size_t need = 4 + sizeof(ver) + sizeof(vt) + 9 * sizeof(int32_t) +
+                  sizeof(double) + sizeof(double);
+    if (got < need) {
+        fclose(fp);
+        tokenizer_set_error("train: truncated checkpoint %s", path);
+        return -1;
+    }
+    if (memcmp(magic, CKPT_MAGIC, 4) != 0 || ver != CKPT_VERSION) {
+        fclose(fp);
+        tokenizer_set_error("train: unsupported checkpoint %s", path);
+        return -1;
+    }
+    size_t vtarget = opts->vocab_size ? opts->vocab_size : 4096;
+    int pmpl = opts->max_piece_len ? opts->max_piece_len : 8;
+    size_t pmc = opts->max_candidates ? (size_t)opts->max_candidates : 1000000;
+    double pee = opts->em_eps > 0 ? opts->em_eps : 1e-4;
+    int psp = opts->shrink_pct ? opts->shrink_pct : 60;
+    int pmr = opts->min_rounds ? opts->min_rounds : 3;
+    /* max_iters is intentionally excluded from the consistency check so a
+     * resume can continue past the previously planned number of rounds. */
+    if (vt != (uint64_t)vtarget || mpl != pmpl || (size_t)mc != pmc ||
+        ee != pee || sp != psp || mr != pmr ||
+        af != opts->add_byte_fallback || fc != opts->fold_case) {
+        fclose(fp);
+        tokenizer_set_error("train: checkpoint parameters mismatch with current options");
+        return -1;
+    }
+    if (vs <= 0 || vs > 100000000) {
+        fclose(fp);
+        tokenizer_set_error("train: checkpoint vsz out of range");
+        return -1;
+    }
+    char **ps = (char **)calloc((size_t)vs, sizeof(char *));
+    int *ls = (int *)malloc((size_t)vs * sizeof(int));
+    float *sc = (float *)malloc((size_t)vs * sizeof(float));
+    if (!ps || !ls || !sc) {
+        free(ps); free(ls); free(sc);
+        fclose(fp);
+        tokenizer_set_error("train: OOM loading checkpoint");
+        return -1;
+    }
+    for (int i = 0; i < vs; i++) {
+        int32_t l;
+        if (fread(&l, 1, sizeof(l), fp) != sizeof(l) ||
+            l < 0 || l > (int32_t)(1 << 20)) {
+            for (int j = 0; j < i; j++) free(ps[j]);
+            free(ps); free(ls); free(sc);
+            fclose(fp);
+            tokenizer_set_error("train: corrupt checkpoint piece header");
+            return -1;
+        }
+        char *buf = (char *)malloc((size_t)l + 1);
+        if (!buf) {
+            for (int j = 0; j < i; j++) free(ps[j]);
+            free(ps); free(ls); free(sc);
+            fclose(fp);
+            tokenizer_set_error("train: OOM loading checkpoint piece");
+            return -1;
+        }
+        if (fread(buf, 1, (size_t)l, fp) != (size_t)l) {
+            free(buf);
+            for (int j = 0; j < i; j++) free(ps[j]);
+            free(ps); free(ls); free(sc);
+            fclose(fp);
+            tokenizer_set_error("train: corrupt checkpoint piece data");
+            return -1;
+        }
+        buf[l] = '\0';
+        float s;
+        if (fread(&s, 1, sizeof(s), fp) != sizeof(s)) {
+            free(buf);
+            for (int j = 0; j < i; j++) free(ps[j]);
+            free(ps); free(ls); free(sc);
+            fclose(fp);
+            tokenizer_set_error("train: corrupt checkpoint piece score");
+            return -1;
+        }
+        ps[i] = buf;
+        ls[i] = (int)l;
+        sc[i] = s;
+    }
+    fclose(fp);
+    *vsz_out = (int)vs;
+    *pieces_out = ps;
+    *plens_out = ls;
+    *scores_out = sc;
+    *round_out = (int)rd;
+    *n_rounds_at_target_out = (int)nr;
+    *prev_ll_out = pl;
+    return 0;
+}
+
+/* ------------------------------------------------------------------ */
 /* train                                                               */
 /* ------------------------------------------------------------------ */
 int tokenizer_train(const tokenizer_train_options *opts) {
@@ -424,15 +639,51 @@ int tokenizer_train(const tokenizer_train_options *opts) {
     if (corpus_load(opts->corpus_path, &corpus) != 0) return -1;
     if (verbose) fprintf(stderr, "[train] corpus lines: %zu\n", corpus.count);
 
-    /* ---- seed n-gram counting ---- */
+    /* ---- optional resume from checkpoint ---- */
+    /* EM working state; on resume, vsz/pieces/plens/scores come from the
+     * checkpoint instead of re-seeding, and the round loop starts at the
+     * saved round. */
+    int vsz = 0;
+    char **pieces = NULL;
+    int *plens = NULL;
+    float *scores = NULL;
+    double *counts = NULL;
+    int n_rounds_at_target = 0;
+    double prev_ll = -INFINITY;
+    int round = 0;
+    int resumed = 0;
+    if (opts->checkpoint_path && *opts->checkpoint_path &&
+        ckpt_exists(opts->checkpoint_path)) {
+        if (ckpt_load(opts, opts->checkpoint_path, &vsz, &pieces, &plens,
+                      &scores, &round, &n_rounds_at_target, &prev_ll) != 0) {
+            corpus_free(&corpus);
+            return -1;
+        }
+        resumed = 1;
+        if (verbose)
+            fprintf(stderr,
+                    "[train] resumed from checkpoint %s (round=%d vsz=%d)\n",
+                    opts->checkpoint_path, round, vsz);
+    }
+
+    /* ---- seed n-gram counting (skipped when resuming) ---- */
+    strhash_t *h = NULL;
+    double total_ngram = 0.0;
+    seed_t seed;
+    memset(&seed, 0, sizeof(seed));
+    int n_fb = 0;
+    if (resumed) {
+        /* byte-fallback count is deterministic when enabled */
+        n_fb = add_fb ? 256 : 0;
+    }
+    if (!resumed) {
     if (verbose) fprintf(stderr, "[train] seeding...\n");
-    strhash_t *h = hash_new(65536, max_candidates);
+    h = hash_new(65536, max_candidates);
     if (!h) {
         corpus_free(&corpus);
         tokenizer_set_error("train: OOM creating seed hash");
         return -1;
     }
-    double total_ngram = 0.0;
     for (size_t li = 0; li < corpus.count; li++) {
         size_t nlen = 0;
         char *norm = normalize_text(corpus.lines[li], corpus.lens[li],
@@ -498,8 +749,6 @@ int tokenizer_train(const tokenizer_train_options *opts) {
     qsort(items, nkeys, sizeof(*items), seed_sort_item_cmp);
     size_t keep = nkeys < max_candidates ? nkeys : max_candidates;
 
-    seed_t seed;
-    memset(&seed, 0, sizeof(seed));
     /* special tokens first (fixed ids) */
     seed_push(&seed, "<unk>", 5, 0.0);
     seed_push(&seed, "<s>", 3, 0.0);
@@ -515,7 +764,6 @@ int tokenizer_train(const tokenizer_train_options *opts) {
     hash_free(h);
 
     /* ---- append byte-fallback placeholders (optional) ---- */
-    int n_fb = 0;
     if (add_fb) {
         for (int b = 0; b < 256; b++) {
             char fb[6];
@@ -528,43 +776,60 @@ int tokenizer_train(const tokenizer_train_options *opts) {
     }
     if (verbose) fprintf(stderr, "[train] seed vocab: %d (byte-fb: %d)\n",
                         seed.size, n_fb);
+    } /* end if (!resumed) */
 
     /* ---- EM ---- */
-    /* work copy: pieces/lens/scores/counts over EM lifetime */
-    int vsz = seed.size;
-    char **pieces = seed.pieces;
-    int *plens = seed.lens;
-    float *scores = (float *)malloc((size_t)vsz * sizeof(float));
-    double *counts = (double *)calloc((size_t)vsz, sizeof(double));
-    if (!scores || !counts) {
-        seed_free(&seed);
-        corpus_free(&corpus);
-        tokenizer_set_error("train: OOM allocating EM buffers");
-        return -1;
-    }
-    /* initial scores from seed frequencies */
-    double sum_freq = 0.0;
-    for (int i = 4; i < vsz; i++) sum_freq += seed.counts[i];
-    for (int i = 0; i < vsz; i++) {
-        if (is_special_id(i, UNK, BOS, EOS, PAD)) {
-            scores[i] = kSpecialScore;
-        } else if (is_bytefb_style(pieces[i], plens[i])) {
-            scores[i] = kFbScore;
-        } else {
-            double p = sum_freq > 0 ? seed.counts[i] / sum_freq : 1e-9;
-            scores[i] = (float)log(p);
+    /* work copy: pieces/lens/scores/counts over EM lifetime.
+     * Fresh start: arrays come from the seed. Resume: arrays come from the
+     * checkpoint; only counts needs a fresh allocation (E step zeroes it). */
+    if (!resumed) {
+        vsz = seed.size;
+        pieces = seed.pieces;
+        plens = seed.lens;
+        scores = (float *)malloc((size_t)vsz * sizeof(float));
+        counts = (double *)calloc((size_t)vsz, sizeof(double));
+        if (!scores || !counts) {
+            seed_free(&seed);
+            corpus_free(&corpus);
+            tokenizer_set_error("train: OOM allocating EM buffers");
+            return -1;
+        }
+        /* initial scores from seed frequencies */
+        double sum_freq = 0.0;
+        for (int i = 4; i < vsz; i++) sum_freq += seed.counts[i];
+        for (int i = 0; i < vsz; i++) {
+            if (is_special_id(i, UNK, BOS, EOS, PAD)) {
+                scores[i] = kSpecialScore;
+            } else if (is_bytefb_style(pieces[i], plens[i])) {
+                scores[i] = kFbScore;
+            } else {
+                double p = sum_freq > 0 ? seed.counts[i] / sum_freq : 1e-9;
+                scores[i] = (float)log(p);
+            }
+        }
+    } else {
+        counts = (double *)calloc((size_t)vsz, sizeof(double));
+        if (!counts) {
+            for (int i = 0; i < vsz; i++) free(pieces[i]);
+            free(pieces); free(plens); free(scores);
+            corpus_free(&corpus);
+            tokenizer_set_error("train: OOM allocating EM buffers");
+            return -1;
         }
     }
 
     trie_t *trie = trie_new();
     if (!trie) {
-        seed_free(&seed); free(scores); free(counts); corpus_free(&corpus);
+        if (resumed) {
+            for (int i = 0; i < vsz; i++) free(pieces[i]);
+            free(pieces); free(plens); free(scores); free(counts);
+        } else {
+            seed_free(&seed); free(scores); free(counts);
+        }
+        corpus_free(&corpus);
         tokenizer_set_error("train: OOM creating trie");
         return -1;
     }
-    int n_rounds_at_target = 0;
-    double prev_ll = -INFINITY;
-    int round = 0;
     if (verbose) fprintf(stderr, "[train] EM start vsz=%d target=%zu\n", vsz, vocab_target);
     for (; round < max_iters; round++) {
         /* rebuild trie from current vocab (skip byte-fb placeholders) */
@@ -749,6 +1014,20 @@ int tokenizer_train(const tokenizer_train_options *opts) {
             if (n_rounds_at_target >= min_rounds) break;
         }
         prev_ll = ll;
+
+        /* ---- save per-round checkpoint (for resume) ---- */
+        if (opts->checkpoint_path && *opts->checkpoint_path) {
+            if (ckpt_save(opts, opts->checkpoint_path, vsz, pieces, plens,
+                          scores, round + 1, n_rounds_at_target, prev_ll) != 0) {
+                if (verbose)
+                    fprintf(stderr, "[train] warn: checkpoint save failed: %s\n",
+                            tokenizer_last_error() ? tokenizer_last_error()
+                                                    : "unknown");
+            } else if (verbose) {
+                fprintf(stderr, "[train] checkpoint saved (round %d)\n",
+                        round + 1);
+            }
+        }
     }
 
     /* ---- save model ---- */

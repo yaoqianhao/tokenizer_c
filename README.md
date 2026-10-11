@@ -2,6 +2,17 @@
 AIGC:
     Label: "1"
     ContentProducer: 001191440300708461136T1XGW3
+    ProduceID: 04526fdd866a8c5c9aceee6b83ed2c05_a190480ac54b11f1820a525400638852
+    ReservedCode1: lQ7qYA9sn+vkOI7CWqXMuytIfWXJiGAPkLYPV+myi7lBDQIkdwPGdMrOhkV/3t0/XvXaGu7fFIaxFSAhg3Sk8OtGYNz/UC/rbEVH2PBKmkYdQnQIPal2RYUjgf8LeyqMHUf7FAA38APHaLD8XPTtahZ2FDh7FrDLMQY3Q1hpb63TsaT7TSw3M8K9ilk=
+    ContentPropagator: 001191440300708461136T1XGW3
+    PropagateID: 04526fdd866a8c5c9aceee6b83ed2c05_a190480ac54b11f1820a525400638852
+    ReservedCode2: lQ7qYA9sn+vkOI7CWqXMuytIfWXJiGAPkLYPV+myi7lBDQIkdwPGdMrOhkV/3t0/XvXaGu7fFIaxFSAhg3Sk8OtGYNz/UC/rbEVH2PBKmkYdQnQIPal2RYUjgf8LeyqMHUf7FAA38APHaLD8XPTtahZ2FDh7FrDLMQY3Q1hpb63TsaT7TSw3M8K9ilk=
+---
+
+---
+AIGC:
+    Label: "1"
+    ContentProducer: 001191440300708461136T1XGW3
     ProduceID: 04526fdd866a8c5c9aceee6b83ed2c05_2eff9b30c50911f1820a525400638852
     ReservedCode1: rQcqIJyMXBkq3tKouD6hKr8b+pu09lyuN4MW9pDtMf2c+WpxONUsj6ESwpAUTaUffMwIGu9rvfhvXtxTJfVs/JooVUMQgXFWQAFlvf7RKVHF8f8XLIxaR3TexG3dmRZQpkMLdNRs5/TtA4xqwpSlYS0TdBYJCfRtOXn7x7ImpXtCHUs0mKPemyEC/Bk=
     ContentPropagator: 001191440300708461136T1XGW3
@@ -321,6 +332,7 @@ gcc -std=c11 -O2 -I../include ../tests/test_tokenizer.c libtokenizer.a -lm -o te
 | `--min-rounds N` | 否 | 连续增益低于阈值的轮数，默认 3 |
 | `--no-byte-fallback` | 否 | 关闭字节回退兜底 |
 | `--fold-case` | 否 | 开启 ASCII 大小写折叠 |
+| `--ckpt <file>` | 否 | 断点续行：每轮 EM 结束后自动保存 checkpoint；训练中断后以相同命令重跑自动恢复、跳过 seed | 
 | `--json <file>` | 否 | 额外导出 HuggingFace 风格 tokenizer.json |
 | `--sp-model <file>` | 否 | 额外导出 SentencePiece `.model` |
 | `-v / --verbose` | 否 | 输出训练过程日志 |
@@ -329,6 +341,32 @@ gcc -std=c11 -O2 -I../include ../tests/test_tokenizer.c libtokenizer.a -lm -o te
 tok-cli train --corpus corpus.txt --model model.tkm \
     --vocab-size 4096 --json model.json --sp-model model.model -v
 ```
+
+#### 12.4.1 断点续行（Checkpoint Resume）
+
+训练命令加 `--ckpt <file>` 参数后，训练器在**每轮 EM 结束后**自动将当前词表与训练状态保存为二进制 checkpoint（魔数 `TKCH` + 版本号 + 参数一致性校验 + 临时文件 rename 原子写入）。
+
+- **断点恢复**：训练中断 / 断电后，以**相同命令**重跑即可自动检测 checkpoint 并**跳过 seed 种子词表构建**，直接从上一轮次继续 EM 迭代。
+- **参数一致性校验**：checkpoint 内记录 `vocab_size / max_piece_len / max_candidates / em_eps / shrink_pct / min_rounds / add_byte_fallback / fold_case`，恢复加载时这些参数**必须与保存时一致**，否则拒绝加载并报错。
+- **max_iters 不受限制**：`--iters`（max_iters）不参与一致性校验，**可提高轮数继续训练**（如原 `--iters 8` 中断后，可改为 `--iters 10` 重跑续训）。
+- **重复运行安全**：checkpoint 已存在时重复执行会直接续训、不会重复 seed，因此可直接重跑训练命令或批处理脚本续训。
+
+```bash
+# 256K 大语料续训示例：原命令加 --ckpt，中断后原样重跑即可续训
+tok-cli train --corpus corpus_big.txt --model model_256k.tkm \
+    --vocab-size 262144 --json model_256k.json \
+    --iters 8 --shrink 60 --ckpt model_256k.ckpt -v
+```
+
+#### 12.4.2 海量语料训练脚本（train_big.bat）
+
+仓库根目录提供 `train_big.bat`（Windows 批处理），一键训练 3.28GB 海量语料（`corpus_big/corpus_big.txt`，含 `corpus_big/en|zh|code/` 子目录语料）：
+
+- **运行方式**：`train_big.bat [iters] [shrink] [vocab_size]`，默认 `iters=8  shrink=60  vocab_size=262144`。
+- **产物路径**：模型 `model_big.tkm`、JSON `model_big.json`、checkpoint `model_big.ckpt` 均输出到仓库根目录；CLI 固定使用 `build3\tok-cli.exe`。
+- **日志**：训练在后台最小化窗口运行，日志写入 `train_big.log`（stdout）与 `train_big.log.err`（stderr）。
+- **查看进度**：`type train_big.log.err | findstr /i "seed EM round"`；进程/内存：`tasklist /fi "imagename eq tok-cli.exe"`。
+- **断点续训**：脚本内置 `--ckpt E:\tokenizer_c\model_big.ckpt`，若该文件已存在会自动检测并从断点续训（跳过 seed），**直接重跑本脚本即可续训**。
 
 **encode —— 编码文本**
 
@@ -516,6 +554,3 @@ python benchmark\eval_metrics.py ^
 结论与改进方向：
 - **zh 领先**：项目对中文压缩更优（zh BPT 8.4% 优于 SP），与「zh 2.6855 chars/token，中文压缩最优」一致。
 - **code/en 落后**：差距主因是训练收敛轮数不同（项目 10 轮 EM vs SP 默认 2 轮 EM 子迭代）与候选词表剪枝策略差异；建议提高 `--iters`/降低 `--shrink` 或扩充 code/en 语料占比后重训，目标 overall ≤ SP×98%（即 ≤ 5.748）。
-
-*（内容由AI生成，仅供参考）*
-*（内容由AI生成，仅供参考）*
