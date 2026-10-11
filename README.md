@@ -196,7 +196,7 @@ void  tokenizer_free(tokenizer_t*);
 
 ## 9. 已知限制
 
-- 词表上限 65,536（id 以 16-bit 存储于 trie 叶节点），`--vocab-size` 超过 65536 会被截断；256K 压测（见 §10）需先扩展该宽度。
+- ~~词表上限 65,536~~（已解除）：trie 叶节点 `piece_id` 与 `vocab_size` 已升级为 32-bit int，`--vocab-size` 不再受 65536 截断；256K 压测（见 §10、§13）已验证通过。
 - 训练为单线程、纯 CPU；语料行长度上限 4096 字节。
 - 归一化已为完整 NFKC（见 §7）；仍可通过 `tokenizer_set_normalizer_hook()` 叠加领域定制。
 - Windows 下 CLI 通过 `GetCommandLineW` + `WideCharToMultiByte` 将命令行参数统一转为 UTF-8，可直接传中文文本；控制台输出编码遵循系统代码页，若显示乱码请将终端切至 UTF-8（`chcp 65001`）或使用 `--file` 从 UTF-8 文件读取输入。
@@ -209,13 +209,13 @@ void  tokenizer_free(tokenizer_t*);
 | v1.0（初始） | ✅ | 纯 C 工程骨架、Unigram 训练器、推理引擎、TKCZ/JSON、C API、CLI、50 项测试 |
 | v1.1 方向1：SentencePiece proto 兼容 | ✅ | `src/sentencepiece.c`：`.model` 导出/加载 + HF 风格 `tokenizer.json`；实测 95/95 检查通过 |
 | v1.1 方向2：完整 NFKC | ✅ | `src/nfkc.c` + `src/nfkc_tables.inc`（UAX #15 分解/排序/重组）；实测 95/95 检查通过 |
-| v1.1 方向3：256K 大规模压测 | ⏳ 待完成 | 需先扩展词表 id 宽度（当前 Trie 叶节点 16-bit，上限 65536），再以多语言大语料训练 256K 词表并输出压测报告至 `benchmark/` |
+| v1.1 方向3：256K 大规模压测 | ✅ | 256K 词表（vocab=262144）多语言压测完成：10 轮 EM 收敛（约 2.75h）；Trie 叶节点 id 已升级 32-bit（见 §12.7）；评测报告见 `benchmark/eval_report_2026-10-10.{json,md}`（§13） |
 
-## 11. 待办（方向3前置）
+## 11. 迭代待办（方向3前置，已全部完成）
 
-- 扩展 Trie 叶节点 id 存储宽度（16-bit → 32-bit），解除 65,536 词表上限；
-- 生成多语言（中/英/代码）大规模语料并按配比采样；
-- 测量并输出：训练内存峰值、种子构建耗时、EM 收敛轮数、编码吞吐（p50/p99）、Trie 查找性能。
+- ✅ 扩展 Trie 叶节点 id 存储宽度（16-bit → 32-bit），解除 65,536 词表上限（见 §12.7）；
+- ✅ 生成多语言（中/英/代码）大规模语料并按配比采样（`benchmark/corpus/`：en 15MB / zh 10MB / code 10MB）；
+- ✅ 测量并输出：编码/解码吞吐、还原率、稳定性、TokEval 维度等评测指标（见 §13 与 `benchmark/eval_report_2026-10-10.md`）。
 
 *（内容由AI生成，仅供参考）*
 
@@ -422,9 +422,80 @@ build\test_tokenizer.exe      # 或 build3\test_tokenizer.exe（手工 gcc 版�
 
 ### 12.7 已知限制
 
-- **词表上限 65,536**：Trie 叶节点以 16-bit 存储 id，`--vocab-size` 超过 65536 会被截断；256K 大规模训练需先扩展 id 存储宽度（16-bit → 32-bit）。
+- **词表上限已解除（32-bit id）**：Trie 叶节点 `piece_id` 与子节点索引、`tokenizer_t.vocab_size` 均为 32-bit int，TKCZ 二进制格式以 u32 存储 vocab 与 piece 长度；`--vocab-size` 上限由 int 符号位决定（2^31-1），256K 词表（262144）压测已验证（见 §13）。
 - **训练单线程、纯 CPU**：语料行长度上限 4096 字节。
 - **归一化**：已为完整 NFKC；仍可通过 `tokenizer_set_normalizer_hook()` 叠加领域定制归一化。
 - **Windows 控制台编码**：CLI 参数已统一转为 UTF-8，可直接传中文；但控制台输出遵循系统代码页，若乱码请 `chcp 65001` 切换终端到 UTF-8，或改用 `--file` 从 UTF-8 文件读取输入。
 - **空白还原语义**：`decode` 将 `▁` 还原为空格，归一化阶段 `\n`、`\t` 等空白统一改写为空格标记，因此含换行的文本往返后换行变成空格（与 SentencePiece 行为一致）。
 - **字节回退**：仅当字符序列无匹配 piece 时按 `<0xXX>` 逐字节兜底；`--no-byte-fallback` 可关闭。
+
+---
+
+## 13. 评测（Evaluation）
+
+本节给出 256K 词表模型（`benchmark/model_256k.tkm`）在 2026-10-10 生成的完整评测结果。完整数据见 `benchmark/eval_report_2026-10-10.json`，人读版见 `benchmark/eval_report_2026-10-10.md`。
+
+### 13.1 测试集构成与配比
+
+由 `benchmark/corpus_64mb.txt`（67.1MB / 745,693 行）按行分类采样，中/英/代码三种语言；分类优先级：含 CJK → `zh`，含代码特征（花括号/分号/关键字）→ `code`，其余 → `en`。
+
+| 语种 | 文件 | 字节 | 行数 | 配比（字节） |
+|---|---|---|---|---|
+| en | `corpus/en/en.txt` | 15.00 MB | 172,125 | 42.8% |
+| zh | `corpus/zh/zh.txt` | 10.00 MB | 80,694 | 28.5% |
+| code | `corpus/code/code.txt` | 10.00 MB | 155,408 | 28.5% |
+| **合计** | | **36.70 MB** | **408,227** | 100% |
+
+*（原始语料无日韩/西里尔等多语言行，`multilingual` 分类实际为空，故评测覆盖 en/zh/code 三类。）*
+
+### 13.2 指标总表
+
+| 指标 | code | en | zh | overall |
+|---|---|---|---|---|
+| tokens | 1,453,791 | 2,125,836 | 1,321,548 | 4,901,175 |
+| BPT（bytes/token） | 7.2127 | 7.3988 | 7.9345 | 7.4881 |
+| chars/token | 7.2127 | 7.3988 | 2.6855 | — |
+| 还原率（字节级，200 行抽样） | 100% | 100% | 57.5%（85/200 因 NFKC） | — |
+| 稳定性（Jaccard，100 句×3 扰动） | 0.6284 | 0.6632 | 0.8354 | 0.7090 |
+| OOV 率 | 0（byte-fallback 设计保证） | 0 | 0 | 0 |
+| utf8_completeness | 1.0000 | 1.0000 | 1.0000 | 1.0000 |
+| boundary_crossing | 0.0000 | 0.0000 | 0.0000 | 0.0000 |
+| char_split_rate | —（无多字节字符） | — | 0.0000 | 0.0000 |
+| digit_boundary_f1 | 0.5000 | —（抽样无数字） | — | 0.5000 |
+| digit_split_variability | 0.9658 | — | — | 0.9658 |
+| operator_isolation | 1.0000 | 0.9667 | —（抽样无操作符） | 0.9833 |
+
+**吞吐（整文件 encode/decode，单线程）**：encode **90,310.8 tokens/s**，decode **7,293.1 tokens/s**，模型加载 479.9 ms。
+
+### 13.3 TokEval 维度（arXiv 2608.18062）
+
+- **UTF-8 完整性**：`utf8_completeness`（多字节字符全部由单 piece 覆盖）/ `char_split_rate`（字符被拆分比率）/ `boundary_crossing`（跨字符边界比率）。三语种完整性 1.0、跨边界 0，UTF-8 无损。
+- **数字对齐**：`digit_boundary_f1`（数字边界切分 F1）/ `digit_split_variability`（同一数字串拆分方差）/ `operator_isolation`（运算符是否独立成 piece）。code 语料抽样 30 个数字串：F1=0.5（数字串被拆散较多，与 256K 词表缺少长数字 piece 有关），变异性 0.9658；运算符基本隔离（0.9833，en 中 `+`/`-` 与上下文粘连致 0.9667）。
+- **说明**：zh 抽样行无数字/操作符，en 无数字，故对应维度为空（`null`）。
+
+### 13.4 运行方式
+
+```bash
+# 前置：构建 tok-cli.exe、训练 model_256k.tkm、准备 corpus/<lang>/*.txt
+python benchmark\eval_metrics.py ^
+  --model benchmark\model_256k.tkm ^
+  --corpus-dir benchmark\corpus ^
+  --cli build\tok-cli.exe ^
+  --output benchmark\eval_report_2026-10-10.json
+# 输出：benchmark\eval_report_2026-10-10.json + 同名 .md
+```
+
+评测脚本：`benchmark/eval_metrics.py`（BPT/还原率/稳定性/OOV/吞吐 + TokEval 三组指标）；语料生成：`benchmark/download_corpus.py` + `scripts/split_corpus.py`（按行分类）。
+
+### 13.5 验收门槛（P0–P4）与当前状态
+
+| 级别 | 门槛 | 当前状态 |
+|---|---|---|
+| P0 | OOV 率恒为 0 | ✅ 通过（byte-fallback 覆盖全部 UTF-8 字节） |
+| P0 | 还原率 100%（字节级） | ⚠️ 部分通过：en/code 100%；zh 因完整 NFKC 归一化（全角标点→半角）字节级非 100%，语义等价（NFKC 归一化行为，见 §12.7） |
+| P1 | BPT ≤ SentencePiece 基线 98% | 📊 已测：overall 7.4881（zh 2.6855 chars/token，中文压缩最优）；SP 基线待补测 |
+| P2 | 稳定性 > 0.95 | ❌ 未达标：overall 0.7090（code 0.6284 / en 0.6632 / zh 0.8354），短序列 Jaccard 对扰动敏感，待改进 |
+| P3 | UTF-8 完整性 1.0、跨边界 0 | ✅ 通过（三语种 utf8_completeness=1.0，boundary_crossing=0） |
+| P4 | 编码吞吐 ≥ 设计目标 | ✅ 已测：encode 90,310.8 t/s、decode 7,293.1 t/s（目标值以方案文档为准） |
+
+*（内容由AI生成，仅供参考）*

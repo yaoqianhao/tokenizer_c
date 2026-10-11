@@ -1,0 +1,14 @@
+# 编译产物
+*.o
+*.obj
+*.a
+*.exe.old
+build/*.old
+
+# Python
+__pycache__/
+*.pyc
+
+# 评测运行痕迹
+benchmark/eval_run.err
+benchmark/eval_run.pid

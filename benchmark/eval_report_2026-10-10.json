@@ -1,0 +1,139 @@
+{
+  "date": "2026-10-10",
+  "model": "C:\\Users\\neroy\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_a043481fd20241bca905dfda23dc693d\\output\\tokenizer_c\\benchmark\\model_256k.tkm",
+  "vocab_size": 262144,
+  "langs": {
+    "code": {
+      "files": [
+        "code.txt"
+      ],
+      "bytes": 10485773,
+      "tokens": 1453791,
+      "bpt": 7.21271,
+      "chars_per_token": 7.21271,
+      "roundtrip_ok": true,
+      "roundtrip_mismatches": 0,
+      "roundtrip_lines": 200,
+      "stability": 0.62841,
+      "oov_rate": null,
+      "byte_fallback_rate": null,
+      "tokeval": {
+        "utf8": {
+          "utf8_completeness": 1.0,
+          "char_split_rate": null,
+          "boundary_crossing_rate": 0.0,
+          "tokens": 6633,
+          "multibyte_chars": 0
+        },
+        "digit": {
+          "digit_boundary_f1": 0.5,
+          "digit_split_variability": 0.965837,
+          "digit_spans": 30,
+          "digit_skipped": 0
+        },
+        "operator": {
+          "operator_isolation": 1.0,
+          "operator_occurrences": 30,
+          "operator_skipped": 0
+        }
+      }
+    },
+    "en": {
+      "files": [
+        "en.txt"
+      ],
+      "bytes": 15728729,
+      "tokens": 2125836,
+      "bpt": 7.398844,
+      "chars_per_token": 7.398844,
+      "roundtrip_ok": true,
+      "roundtrip_mismatches": 0,
+      "roundtrip_lines": 200,
+      "stability": 0.663218,
+      "oov_rate": null,
+      "byte_fallback_rate": null,
+      "tokeval": {
+        "utf8": {
+          "utf8_completeness": 1.0,
+          "char_split_rate": null,
+          "boundary_crossing_rate": 0.0,
+          "tokens": 9701,
+          "multibyte_chars": 0
+        },
+        "digit": {
+          "digit_boundary_f1": null,
+          "digit_split_variability": null,
+          "digit_spans": 0,
+          "digit_skipped": 0
+        },
+        "operator": {
+          "operator_isolation": 0.966667,
+          "operator_occurrences": 30,
+          "operator_skipped": 0
+        }
+      }
+    },
+    "zh": {
+      "files": [
+        "zh.txt"
+      ],
+      "bytes": 10485771,
+      "tokens": 1321548,
+      "bpt": 7.934461,
+      "chars_per_token": 2.685527,
+      "roundtrip_ok": false,
+      "roundtrip_mismatches": 85,
+      "roundtrip_lines": 200,
+      "stability": 0.835437,
+      "oov_rate": null,
+      "byte_fallback_rate": null,
+      "tokeval": {
+        "utf8": {
+          "utf8_completeness": 1.0,
+          "char_split_rate": 0.0,
+          "boundary_crossing_rate": 0.0,
+          "tokens": 11046,
+          "multibyte_chars": 429
+        },
+        "digit": {
+          "digit_boundary_f1": null,
+          "digit_split_variability": null,
+          "digit_spans": 0,
+          "digit_skipped": 0
+        },
+        "operator": {
+          "operator_isolation": null,
+          "operator_occurrences": 0,
+          "operator_skipped": 0
+        }
+      }
+    }
+  },
+  "totals": {
+    "bytes": 36700273,
+    "tokens": 4901175,
+    "bpt": 7.488056
+  },
+  "roundtrip_ok": false,
+  "tokeval": {
+    "utf8_completeness": 1.0,
+    "char_split_rate": 0.0,
+    "boundary_crossing_rate": 0.0,
+    "digit_boundary_f1": 0.5,
+    "digit_split_variability": 0.965837,
+    "operator_isolation": 0.983334
+  },
+  "stability": {
+    "per_lang": {
+      "code": 0.62841,
+      "en": 0.663218,
+      "zh": 0.835437
+    },
+    "overall": 0.709022
+  },
+  "throughput": {
+    "encode_tps": 90310.777,
+    "decode_tps": 7293.054,
+    "load_ms": 479.932
+  }
+}
