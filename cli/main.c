@@ -50,6 +50,18 @@ static char **win32_argv_to_utf8(int *argc_out) {
 #endif
 }
 
+/* P0-1: 64-bit file size (Windows). */
+static int cli_file_size64(FILE *fp, long long *out) {
+    __int64 cur = _ftelli64(fp);
+    if (cur < 0) return -1;
+    if (_fseeki64(fp, 0, SEEK_END) != 0) return -1;
+    __int64 sz = _ftelli64(fp);
+    _fseeki64(fp, cur, SEEK_SET);
+    if (sz < 0) return -1;
+    *out = (long long)sz;
+    return 0;
+}
+
 static const char *g_prog = "tok-cli";
 
 static void usage(void) {
@@ -229,9 +241,10 @@ static int run_encode(int argc, char **argv) {
     } else {
         FILE *fp = fopen(file, "rb");
         if (!fp) { fprintf(stderr, "cannot open %s\n", file); tokenizer_free(tok); return 1; }
-        fseek(fp, 0, SEEK_END);
-        long sz = ftell(fp);
-        fseek(fp, 0, SEEK_SET);
+        long long sz = 0;
+        if (cli_file_size64(fp, &sz) != 0 || sz <= 0) {
+            fclose(fp); tokenizer_free(tok); return 1;
+        }
         content = (char *)malloc((size_t)sz + 1);
         if (!content) { fclose(fp); tokenizer_free(tok); return 1; }
         size_t rd = fread(content, 1, (size_t)sz, fp);
@@ -304,8 +317,16 @@ static int run_decode(int argc, char **argv) {
         long v = strtol(p, &end, 10);
         if (end == p) break;
         if (n >= cap) {
-            cap *= 2;
-            ids = (int *)realloc(ids, cap * sizeof(int));
+            size_t ncap = cap ? cap * 2 : 256;
+            int *nids = (int *)realloc(ids, ncap * sizeof(int));
+            if (!nids) {
+                fprintf(stderr, "decode: OOM growing id buffer\n");
+                free(ids);
+                tokenizer_free(tok);
+                return 1;
+            }
+            ids = nids;
+            cap = ncap;
         }
         ids[n++] = (int)v;
         p = end;

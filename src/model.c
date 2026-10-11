@@ -65,7 +65,8 @@ int tokenizer_save_binary(const tokenizer_t *tok, const char *path) {
     put_i32(buf + o, tok->bos_id); o += 4;
     put_i32(buf + o, tok->eos_id); o += 4;
     put_i32(buf + o, tok->pad_id); o += 4;
-    put_u32(buf + o, tok->byte_fallback ? 1u : 0u); o += 4;
+    put_u32(buf + o, (tok->byte_fallback ? 1u : 0u) |
+                     (tok->fold_case ? 2u : 0u)); o += 4;
     for (int i = 0; i < tok->vocab_size; i++) {
         put_u32(buf + o, (uint32_t)tok->piece_lens[i]); o += 4;
         memcpy(buf + o, tok->pieces[i], (size_t)tok->piece_lens[i]);
@@ -113,12 +114,14 @@ tokenizer_t *tokenizer_load_binary_mem(const void *data, size_t size) {
     int pad = get_i32(p + 24);
     uint32_t flags = get_u32(p + 28);
     int byte_fb = (int)(flags & 1u);
+    int fold_case = (int)((flags >> 1) & 1u);
 
     if (vocab > 100000000) {
         tokenizer_set_error("load: implausible vocab size %u", (unsigned)vocab);
         return NULL;
     }
     tokenizer_t *tok = tokenizer_create(unk, bos, eos, pad, byte_fb);
+    if (tok) tok->fold_case = fold_case; /* P1-3 */
     if (!tok) {
         tokenizer_set_error("load: OOM");
         return NULL;
@@ -145,6 +148,7 @@ tokenizer_t *tokenizer_load_binary_mem(const void *data, size_t size) {
         }
         o += plen + 4;
     }
+    tokenizer_clear_error();
     return tok;
 }
 
@@ -154,10 +158,9 @@ tokenizer_t *tokenizer_load_binary_file(const char *path) {
         tokenizer_set_error("load: cannot open %s", path);
         return NULL;
     }
-    fseek(fp, 0, SEEK_END);
-    long sz = ftell(fp);
-    fseek(fp, 0, SEEK_SET);
-    if (sz <= 0) {
+    nfkc_prewarm(); /* P2-7: build NFKC tables on a single-threaded entry */
+    int64_t sz = 0;
+    if (file_size64(fp, &sz) != 0 || sz <= 0) {
         fclose(fp);
         tokenizer_set_error("load: empty model file");
         return NULL;

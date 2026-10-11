@@ -33,6 +33,10 @@ const char *tokenizer_last_error(void) {
     return tls_error[0] ? tls_error : NULL;
 }
 
+void tokenizer_clear_error(void) {
+    tls_error[0] = '\0';
+}
+
 static void set_error(const char *msg) {
     snprintf(tls_error, sizeof(tls_error), "%s", msg);
 }
@@ -83,14 +87,23 @@ void tokenizer_free(tokenizer_t *tok) {
 /* ------------------------------------------------------------------ */
 static int tokenizer_ensure_piece_slots(tokenizer_t *tok, int need) {
     if (need < 0 || need > 100000000) return -1; /* sanity */
-    char **np = (char **)realloc(tok->pieces, (size_t)need * sizeof(char *));
-    if (!np) return -1;
+    char **np = (char **)malloc((size_t)need * sizeof(char *));
+    int *nl = (int *)malloc((size_t)need * sizeof(int));
+    float *ns = (float *)malloc((size_t)need * sizeof(float));
+    if (!np || !nl || !ns) {
+        free(np); free(nl); free(ns);
+        return -1;
+    }
+    if (tok->vocab_size > 0) {
+        memcpy(np, tok->pieces, (size_t)tok->vocab_size * sizeof(char *));
+        memcpy(nl, tok->piece_lens, (size_t)tok->vocab_size * sizeof(int));
+        memcpy(ns, tok->scores, (size_t)tok->vocab_size * sizeof(float));
+    }
+    free(tok->pieces);
+    free(tok->piece_lens);
+    free(tok->scores);
     tok->pieces = np;
-    int *nl = (int *)realloc(tok->piece_lens, (size_t)need * sizeof(int));
-    if (!nl) return -1;
     tok->piece_lens = nl;
-    float *ns = (float *)realloc(tok->scores, (size_t)need * sizeof(float));
-    if (!ns) return -1;
     tok->scores = ns;
     for (int i = tok->vocab_size; i < need; i++) {
         tok->pieces[i] = NULL;
@@ -173,6 +186,7 @@ tokenizer_t *tokenizer_load(const char *model_path) {
             return NULL;
         }
     }
+    tokenizer_clear_error();
     return tok;
 }
 
@@ -184,6 +198,7 @@ tokenizer_t *tokenizer_load_from_memory(const void *data, size_t size) {
         set_error("failed to build trie");
         return NULL;
     }
+    tokenizer_clear_error();
     return tok;
 }
 
@@ -262,7 +277,7 @@ static char *normalize_for_encode(const tokenizer_t *tok, const char *text,
         if (r) return r;
         /* hook returned NULL => fall through to builtin */
     }
-    return normalize_text(text, len, 1 /*mark_spaces*/, 0 /*fold_case*/,
+    return normalize_text(text, len, 1 /*mark_spaces*/, tok->fold_case,
                           out_len);
 }
 
@@ -313,7 +328,6 @@ int tokenizer_encode(const tokenizer_t *tok, const char *text, size_t len,
             prev[i] = (i == 0) ? 0 : i - 1;
         }
         int m = trie_match_prefixes(tok->trie, s, n, i, ids, ends, MAX_MATCH);
-        int any_updated = 0;
         for (int k = 0; k < m; k++) {
             size_t j = ends[k];
             int pid = ids[k];
@@ -322,12 +336,14 @@ int tokenizer_encode(const tokenizer_t *tok, const char *text, size_t len,
                 dp[j] = cand;
                 best[j] = pid;
                 prev[j] = i;
-                any_updated = 1;
             }
         }
-        /* byte-fallback: guarantee progress by at least one byte */
-        if (dp[i + 1] == -INFINITY && !any_updated) {
-            dp[i + 1] = dp[i] + kByteFallbackScore;
+        /* P1-2: unconditional 1-byte edge so every position keeps a default
+         * byte-fallback transition; the old "only when unreachable" repair
+         * could leave dp holes that backtracking never resolved. */
+        double fb = dp[i] + kByteFallbackScore;
+        if (fb > dp[i + 1]) {
+            dp[i + 1] = fb;
             best[i + 1] = -1 - (int)(unsigned char)s[i];
             prev[i + 1] = i;
         }
@@ -365,6 +381,7 @@ int tokenizer_encode(const tokenizer_t *tok, const char *text, size_t len,
     free(norm); free(dp); free(best); free(prev); free(path);
     if (out_ids) *out_ids = res; else free(res);
     if (out_n) *out_n = cnt;
+    tokenizer_clear_error();
     return 0;
 }
 
@@ -405,7 +422,7 @@ int tokenizer_decode(const tokenizer_t *tok, const int *ids, size_t n,
         int id = ids[k];
         /* virtual byte-fallback markers emitted by encode */
         if (id < 0 && id >= -256) {
-            if (o + 1 >= cap) break;
+            if (o + 1 >= cap) goto overflow;
             buf[o++] = (char)(-id - 1);
             continue;
         }
@@ -413,30 +430,32 @@ int tokenizer_decode(const tokenizer_t *tok, const int *ids, size_t n,
         int plen = tok->piece_lens[id];
         unsigned byte = 0;
         if (is_byte_fallback_piece(p, plen, &byte)) {
-            if (o + 1 >= cap) break;
+            if (o + 1 >= cap) goto overflow;
             buf[o++] = (char)byte;
             continue;
         }
         /* ▁ -> ' ' (and any other occurrence of the mark) */
-        int written = 0;
         for (int b = 0; b < plen; b++) {
             if ((unsigned char)p[b] == 0xE2 && b + 2 < plen &&
                 (unsigned char)p[b+1] == 0x96 && (unsigned char)p[b+2] == 0x81) {
-                if (o + 1 >= cap) break;
+                if (o + 1 >= cap) goto overflow;
                 buf[o++] = ' ';
                 b += 2;
-                written = 1;
             } else {
-                if (o + 1 >= cap) break;
+                if (o + 1 >= cap) goto overflow;
                 buf[o++] = p[b];
             }
         }
-        (void)written;
     }
     buf[o] = '\0';
     if (out_text) *out_text = buf; else free(buf);
     if (out_len) *out_len = o;
+    tokenizer_clear_error();
     return 0;
+overflow:
+    free(buf);
+    set_error("tokenizer_decode: output buffer overflow");
+    return -1;
 }
 
 void tokenizer_free_text(char *text) { free(text); }

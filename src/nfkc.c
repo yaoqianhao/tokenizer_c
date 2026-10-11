@@ -19,16 +19,32 @@
  * Built lazily, freed never (small). */
 static uint32_t *s_decomp_index = NULL; /* UINT32_MAX = none */
 
-static void ensure_index(void) {
-    if (s_decomp_index) return;
+/* P2-7: MinGW UCRT lacks <threads.h> (C11 call_once), so use a GCC
+ * atomic one-time guard. All entry points are single-threaded
+ * (nfkc_prewarm is called before use), double-checked anyway. */
+static int s_index_built = 0;
+
+static void build_index(void) {
     uint32_t *idx = (uint32_t *)malloc(0x30000 * sizeof(uint32_t));
-    if (!idx) return;
+    if (!idx) return; /* fallback: binary search still works */
     memset(idx, 0xFF, 0x30000 * sizeof(uint32_t));
     for (uint32_t i = 0; i < NFKC_DECOMP_N; i++) {
         uint32_t cp = kNfkcDecompEntries[i].cp;
         if (cp < 0x30000) idx[cp] = i;
     }
     s_decomp_index = idx;
+}
+
+static void ensure_index(void) {
+    if (!__atomic_load_n(&s_index_built, __ATOMIC_ACQUIRE)) {
+        build_index();
+        __atomic_store_n(&s_index_built, 1, __ATOMIC_RELEASE);
+    }
+}
+
+/* Explicit prewarm for single-threaded entry points (load / train). */
+void nfkc_prewarm(void) {
+    ensure_index();
 }
 
 static const uint32_t kNoIdx = 0xFFFFFFFFu;

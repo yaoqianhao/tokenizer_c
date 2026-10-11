@@ -20,8 +20,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h> /* ssize_t for read_line (P0-1) */
 
 #define TRAIN_MAX_LINE 4096 /* per-sequence byte cap (design doc §5.4) */
+
+/* P2-3: file-level sort pair so comparator never needs global state.
+ * Used by the EM prune step: score desc, longer piece first on ties. */
+typedef struct {
+    float score;
+    int len;
+    int id;
+} pruned_pair_t;
 
 /* ------------------------------------------------------------------ */
 /* corpus                                                             */
@@ -33,83 +42,89 @@ typedef struct {
     size_t cap;
 } corpus_t;
 
+/* read_line: returns bytes read (>=0), 0 at EOF, -1 on error/OOM.
+ * - loads at most cap-1 bytes (line is NUL-terminated)
+ * - strips a trailing '\n' and '\r'
+ * - consumes the rest of an over-long line so the next call starts clean */
+static ssize_t read_line(FILE *fp, char *buf, size_t cap, size_t *out_len) {
+    size_t n = 0;
+    int c;
+    while (n + 1 < cap && (c = fgetc(fp)) != EOF) {
+        if (c == '\n') break;
+        buf[n++] = (char)c;
+    }
+    if (n == 0 && c == EOF) {
+        if (ferror(fp)) return -1;
+        return 0; /* clean EOF */
+    }
+    /* consume the rest of an over-long line */
+    if (n + 1 >= cap) {
+        while ((c = fgetc(fp)) != EOF && c != '\n') {
+            /* drain */
+        }
+    }
+    if (n > 0 && buf[n - 1] == '\r') n--;
+    buf[n] = '\0';
+    *out_len = n;
+    return (ssize_t)n;
+}
+
 static int corpus_load(const char *path, corpus_t *c) {
     FILE *fp = fopen(path, "rb");
     if (!fp) {
         tokenizer_set_error("train: cannot open corpus %s", path);
         return -1;
     }
-    fseek(fp, 0, SEEK_END);
-    long sz = ftell(fp);
-    fseek(fp, 0, SEEK_SET);
-    if (sz <= 0) {
+    int64_t sz = 0;
+    if (file_size64(fp, &sz) != 0 || sz <= 0) {
         fclose(fp);
         tokenizer_set_error("train: empty corpus");
         return -1;
     }
-    char *data = (char *)malloc((size_t)sz + 1);
-    if (!data) {
-        fclose(fp);
-        tokenizer_set_error("train: OOM reading corpus");
-        return -1;
-    }
-    size_t rd = fread(data, 1, (size_t)sz, fp);
-    fclose(fp);
-    if (rd != (size_t)sz) {
-        free(data);
-        tokenizer_set_error("train: short read on corpus");
-        return -1;
-    }
-    data[rd] = '\0';
 
     c->lines = NULL;
     c->lens = NULL;
     c->count = 0;
     c->cap = 0;
 
-    /* skip UTF-8 BOM if present */
-    size_t start = 0;
-    if (rd >= 3 && (unsigned char)data[0] == 0xEF &&
-        (unsigned char)data[1] == 0xBB && (unsigned char)data[2] == 0xBF) {
-        start = 3;
-    }
-    for (size_t i = 0; i <= rd; i++) {
-        if (i == rd || data[i] == '\n') {
-            size_t end = i;
-            while (end > start && data[end - 1] == '\r') end--;
-            if (end - start > 0) {
-                if (c->count >= c->cap) {
-                    size_t ncap = c->cap ? c->cap * 2 : 1024;
-                    char **nl = (char **)realloc(c->lines, ncap * sizeof(char *));
-                    if (!nl) goto oom;
-                    c->lines = nl;
-                    size_t *nlens = (size_t *)realloc(c->lens, ncap * sizeof(size_t));
-                    if (!nlens) goto oom;
-                    c->lens = nlens;
-                    c->cap = ncap;
-                }
-                size_t llen = end - start;
-                if (llen > TRAIN_MAX_LINE) {
-                    llen = TRAIN_MAX_LINE; /* cap per-sequence length */
-                }
-                char *copy = (char *)malloc(llen + 1);
-                if (!copy) goto oom;
-                memcpy(copy, data + start, llen);
-                copy[llen] = '\0';
-                c->lines[c->count] = copy;
-                c->lens[c->count] = llen;
-                c->count++;
-            }
-            start = i + 1;
+    char linebuf[TRAIN_MAX_LINE + 1];
+    size_t llen = 0;
+    ssize_t r;
+    while ((r = read_line(fp, linebuf, sizeof(linebuf), &llen)) >= 0) {
+        if (r == 0) break; /* EOF */
+        if (c->count >= c->cap) {
+            size_t ncap = c->cap ? c->cap * 2 : 1024;
+            char **nl = (char **)realloc(c->lines, ncap * sizeof(char *));
+            if (!nl) goto oom;
+            c->lines = nl;
+            size_t *nlens = (size_t *)realloc(c->lens, ncap * sizeof(size_t));
+            if (!nlens) goto oom;
+            c->lens = nlens;
+            c->cap = ncap;
         }
+        char *copy = (char *)malloc(llen + 1);
+        if (!copy) goto oom;
+        memcpy(copy, linebuf, llen);
+        copy[llen] = '\0';
+        c->lines[c->count] = copy;
+        c->lens[c->count] = llen;
+        c->count++;
     }
-    free(data);
+    if (r < 0 || ferror(fp)) {
+        for (size_t i = 0; i < c->count; i++) free(c->lines[i]);
+        free(c->lines);
+        free(c->lens);
+        fclose(fp);
+        tokenizer_set_error("train: read error on corpus");
+        return -1;
+    }
+    fclose(fp);
     return 0;
 oom:
-    free(data);
     for (size_t i = 0; i < c->count; i++) free(c->lines[i]);
     free(c->lines);
     free(c->lens);
+    fclose(fp);
     tokenizer_set_error("train: OOM in corpus_load");
     return -1;
 }
@@ -263,15 +278,20 @@ typedef struct {
 static int seed_push(seed_t *s, const char *piece, size_t len, double count) {
     if (s->size >= s->cap) {
         int ncap = s->cap ? s->cap * 2 : 4096;
-        char **np = (char **)realloc(s->pieces, (size_t)ncap * sizeof(char *));
-        if (!np) return -1;
-        s->pieces = np;
-        int *nl = (int *)realloc(s->lens, (size_t)ncap * sizeof(int));
-        if (!nl) return -1;
-        s->lens = nl;
-        double *nc = (double *)realloc(s->counts, (size_t)ncap * sizeof(double));
-        if (!nc) return -1;
-        s->counts = nc;
+        char **np = (char **)malloc((size_t)ncap * sizeof(char *));
+        int *nl = (int *)malloc((size_t)ncap * sizeof(int));
+        double *nc = (double *)malloc((size_t)ncap * sizeof(double));
+        if (!np || !nl || !nc) {
+            free(np); free(nl); free(nc);
+            return -1;
+        }
+        if (s->size > 0) {
+            memcpy(np, s->pieces, (size_t)s->size * sizeof(char *));
+            memcpy(nl, s->lens, (size_t)s->size * sizeof(int));
+            memcpy(nc, s->counts, (size_t)s->size * sizeof(double));
+        }
+        free(s->pieces); free(s->lens); free(s->counts);
+        s->pieces = np; s->lens = nl; s->counts = nc;
         s->cap = ncap;
     }
     char *copy = (char *)malloc(len + 1);
@@ -359,7 +379,6 @@ static int viterbi_segment(const trie_t *trie, const int vocab_size,
     for (size_t i = 0; i < n; i++) {
         if (dp[i] == -INFINITY) dp[i] = (i == 0) ? 0.0 : dp[i - 1] + kFbScore;
         int m = trie_match_prefixes(trie, s, n, i, ids, ends, MAX_MATCH);
-        int any = 0;
         for (int k = 0; k < m; k++) {
             size_t j = ends[k];
             int pid = ids[k];
@@ -369,11 +388,14 @@ static int viterbi_segment(const trie_t *trie, const int vocab_size,
                 dp[j] = cand;
                 best[j] = pid;
                 prev[j] = i;
-                any = 1;
             }
         }
-        if (dp[i + 1] == -INFINITY && !any) {
-            dp[i + 1] = dp[i] + kFbScore;
+        /* P1-2 + 额外发现 1: unconditional byte edge AND best/prev are
+         * always written, so DP holes are fully repaired on the train side
+         * (the old branch wrote dp but not best/prev). */
+        double fb = dp[i] + kFbScore;
+        if (fb > dp[i + 1]) {
+            dp[i + 1] = fb;
             best[i + 1] = vocab_size + (unsigned char)s[i]; /* fallback marker */
             prev[i + 1] = i;
         }
@@ -615,6 +637,7 @@ static int ckpt_load(const tokenizer_train_options *opts, const char *path,
 /* train                                                               */
 /* ------------------------------------------------------------------ */
 int tokenizer_train(const tokenizer_train_options *opts) {
+    nfkc_prewarm(); /* P2-7: build NFKC tables up-front (single-threaded) */
     if (!opts || !opts->corpus_path || !opts->model_path) {
         tokenizer_set_error("train: corpus_path and model_path required");
         return -1;
@@ -678,7 +701,12 @@ int tokenizer_train(const tokenizer_train_options *opts) {
     }
     if (!resumed) {
     if (verbose) fprintf(stderr, "[train] seeding...\n");
-    h = hash_new(65536, max_candidates);
+    /* P1-1: 种子 Top-K。hash 硬 cap 放宽 8 倍：3GB 语料 distinct n-gram
+     * 远超 max_candidates 时仍会拒绝新 key，但绝大多数场景下可收集到
+     * 足够覆盖 Top-K 的候选，随后统一 qsort 截断。内存成本约每 entry
+     * 24~32B，按 max_candidates=1000000 计约 256MB 上限内。 */
+    size_t seed_cap = max_candidates > SIZE_MAX / 8 ? SIZE_MAX : max_candidates * 8;
+    h = hash_new(65536, seed_cap);
     if (!h) {
         corpus_free(&corpus);
         tokenizer_set_error("train: OOM creating seed hash");
@@ -689,7 +717,8 @@ int tokenizer_train(const tokenizer_train_options *opts) {
         char *norm = normalize_text(corpus.lines[li], corpus.lens[li],
                                     1 /*mark_spaces*/, fold_case, &nlen);
         if (!norm) continue;
-        if (verbose) fprintf(stderr, "[train] seed line %zu norm_len=%zu\n", li, nlen);
+        if (verbose && (li % 100000 == 0))
+            fprintf(stderr, "[train] seed line %zu / %zu\n", li, corpus.count);
         for (size_t i = 0; i < nlen; i++) {
             /* only start windows at UTF-8 character boundaries */
             int lead = utf8_seq_len((uint8_t)norm[i]);
@@ -807,6 +836,10 @@ int tokenizer_train(const tokenizer_train_options *opts) {
                 scores[i] = (float)log(p);
             }
         }
+        /* P2-1: seed.counts 仅供初始 score 估计，EM 不接管（counts 为独立
+         * calloc），释放防泄漏；置 NULL 使错误路径 seed_free() 安全。 */
+        free(seed.counts);
+        seed.counts = NULL;
     } else {
         counts = (double *)calloc((size_t)vsz, sizeof(double));
         if (!counts) {
@@ -838,7 +871,11 @@ int tokenizer_train(const tokenizer_train_options *opts) {
         if (!trie) break;
         for (int i = 0; i < vsz; i++) {
             if (is_bytefb_style(pieces[i], plens[i])) continue;
-            trie_insert(trie, pieces[i], (size_t)plens[i], i);
+            if (trie_insert(trie, pieces[i], (size_t)plens[i], i) != 0) {
+                /* P2-6: OOM mid-round — abort and let done: clean up */
+                tokenizer_set_error("train: OOM rebuilding trie");
+                goto done;
+            }
         }
 
         /* E step */
@@ -884,14 +921,12 @@ int tokenizer_train(const tokenizer_train_options *opts) {
 
         /* prune toward target */
         if (vsz > (int)vocab_target) {
-            /* index sort: specials first, byte-fb last, others by score desc */
+            /* index sort: specials first, byte-fb last, others by score desc
+             * (tie-break: longer piece first). Uses file-level pruned_pair_t
+             * so no global-pointer comparator workaround is needed (P2-3). */
             int *order = (int *)malloc((size_t)vsz * sizeof(int));
             if (!order) break;
             for (int i = 0; i < vsz; i++) order[i] = i;
-            /* simple insertion of comparator via qsort_r-like closure: use a
-             * static context through the callback-free approach: sort manually
-             * with qsort and a comparator that consults globals is unsafe, so
-             * we do a stable manual selection below instead. */
             /* --- manual ordering by category --- */
             /* bucket: special(0), normal(1), bytefb(2) */
             int *buckets[3];
@@ -921,22 +956,21 @@ int tokenizer_train(const tokenizer_train_options *opts) {
                 else b = 1;
                 buckets[b][oi[b]++] = i;
             }
-            /* sort normal bucket by score desc (qsort needs comparator with
-             * access to scores -> use a global pointer workaround is unsafe;
-             * instead sort (score,id) pairs). */
             if (bn[1] > 1) {
-                typedef struct { float score; int id; } pair_t;
-                pair_t *pairs = (pair_t *)malloc((size_t)bn[1] * sizeof(pair_t));
+                pruned_pair_t *pairs = (pruned_pair_t *)malloc((size_t)bn[1] * sizeof(pruned_pair_t));
                 if (pairs) {
                     for (int i = 0; i < bn[1]; i++) {
-                        pairs[i].score = scores[buckets[1][i]];
-                        pairs[i].id = buckets[1][i];
+                        int id = buckets[1][i];
+                        pairs[i].score = scores[id];
+                        pairs[i].len = plens[id];
+                        pairs[i].id = id;
                     }
-                    /* simple insertion sort by score desc (stable-ish) */
+                    /* insertion sort: score desc, then len desc */
                     for (int i = 1; i < bn[1]; i++) {
-                        pair_t key = pairs[i];
+                        pruned_pair_t key = pairs[i];
                         int j = i - 1;
-                        while (j >= 0 && pairs[j].score < key.score) {
+                        while (j >= 0 && (pairs[j].score < key.score ||
+                                          (pairs[j].score == key.score && pairs[j].len < key.len))) {
                             pairs[j + 1] = pairs[j];
                             j--;
                         }
@@ -1032,6 +1066,7 @@ int tokenizer_train(const tokenizer_train_options *opts) {
 
     /* ---- save model ---- */
     tokenizer_t *tok = tokenizer_create(UNK, BOS, EOS, PAD, add_fb);
+    if (tok) tok->fold_case = fold_case; /* P1-3 */
     int rc = -1;
     if (tok) {
         for (int i = 0; i < vsz; i++) {
@@ -1048,6 +1083,7 @@ int tokenizer_train(const tokenizer_train_options *opts) {
     }
 done:
     if (tok) tokenizer_free(tok);
+    if (rc == 0) tokenizer_clear_error(); /* P1-4: success clears sticky error */
     for (int i = 0; i < vsz; i++) free(pieces[i]);
     free(pieces);
     free(plens);

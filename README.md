@@ -531,6 +531,7 @@ python benchmark\eval_metrics.py ^
 ## 16. 相关文档
 
 - `2026-10-09-tokenizer-design.md`：设计文档（需求、架构、算法、接口、里程碑、验证标准）
+- `2026-10-11-code-review-fix-plan.md`：代码审阅与修改建议（P0–P2 问题清单、分批改法、回归清单）
 - `benchmark/eval_report_2026-10-10.md`：256K 模型评测报告
 - `benchmark/tokenizer_comparison_report.md`：多厂商 tokenizer 对比报告
 - `benchmark/tokenizer_c_benchmark_comparison.md`：厂商 vs tokenizer_c 汇总对比

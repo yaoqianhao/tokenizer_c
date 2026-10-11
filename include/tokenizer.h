@@ -78,13 +78,16 @@ void tokenizer_free_text(char *text);
 /* Normalization                                                       */
 /* ------------------------------------------------------------------ */
 
-/* Basic normalization subset (NFKC-like):
+/* Full NFKC normalization (Unicode UAX #15):
  *   - strip C0/C1 control chars (keeps \n \r \t)
- *   - map Unicode whitespace family to ASCII space
- *   - map full-width (U+FF01..U+FF5E) to half-width ASCII, U+3000 -> space
+ *   - map the Unicode whitespace family to ASCII space
+ *   - full NFKC decomposition / canonical ordering / recomposition
+ *     (full-width, circled digits, ligatures, roman numerals,
+ *      super/subscripts, compat currency signs, ...)
+ *   - strip zero-width chars and BOM
  *   - optional ASCII case folding
- *   - mark plain spaces with ▁ (U+2581) so encode/decode round-trips
- * Returns malloc'ed UTF-8 string (caller frees with tokenizer_free_text). */
+ *   - mark plain spaces with U+2581 (▁) when mark_spaces=1
+ * Returns a malloc'ed UTF-8 string (free with tokenizer_free_text). */
 char *tokenizer_normalize(const char *text, size_t len, size_t *out_len);
 
 /* Extension hook for custom normalization (full NFKC tables, etc.).
@@ -113,7 +116,7 @@ typedef struct tokenizer_train_options {
     double  em_eps;          /* convergence threshold (log-likelihood delta); 0 => 1e-4 */
     int     shrink_pct;      /* keep top-% pieces per pruning round; 0 => 60 */
     int     min_rounds;      /* min EM rounds after reaching target size; 0 => 3 */
-    int     add_byte_fallback; /* add 256 <0xXX> pieces; 0 => on (1) */
+    int     add_byte_fallback; /* add 256 <0xXX> pieces; 1 => on (default), 0 => off */
     int     fold_case;         /* ASCII case folding in normalization */
     int     verbose;           /* progress logging; 0 => off */
     /* Optional export */

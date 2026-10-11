@@ -347,9 +347,10 @@ int main(void) {
                       "json exposes unk/bos/eos/pad tokens");
                 CHECK(strstr(buf, "\"type\": \"Unigram\"") != NULL,
                       "json has Unigram model config");
-                CHECK(strstr(buf, "\"vocab\"") != NULL &&
-                      strstr(buf, "\"unk_id\": 0") != NULL,
-                      "json has vocab map and unk_id");
+                CHECK(strstr(buf, "\"vocab\": [") != NULL && strstr(buf, "\"unk_id\": 0") != NULL,
+                      "json has vocab ARRAY and unk_id");
+                CHECK(strstr(buf, "[\"<unk>\", ") != NULL || strstr(buf, "[\"▁\", ") != NULL,
+                      "json vocab entries are [piece, score] pairs");
                 free(buf);
             }
             fclose(fp);

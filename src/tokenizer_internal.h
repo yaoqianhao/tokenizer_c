@@ -6,12 +6,39 @@
 #include "trie.h"
 #include "utf8.h"
 #include "normalize.h"
+#include "nfkc.h"
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 
 #ifdef __cplusplus
 extern "C" {
+#endif
+
+/* ---- 64-bit file size helper (P0-1) ---- */
+#if defined(_WIN32)
+static int file_size64(FILE *fp, int64_t *out) {
+    __int64 cur = _ftelli64(fp);
+    if (cur < 0) return -1;
+    if (_fseeki64(fp, 0, SEEK_END) != 0) return -1;
+    __int64 sz = _ftelli64(fp);
+    _fseeki64(fp, cur, SEEK_SET);
+    if (sz < 0) return -1;
+    *out = (int64_t)sz;
+    return 0;
+}
+#else
+static int file_size64(FILE *fp, int64_t *out) {
+    off_t cur = ftello(fp);
+    if (cur < 0) return -1;
+    if (fseeko(fp, 0, SEEK_END) != 0) return -1;
+    off_t sz = ftello(fp);
+    fseeko(fp, cur, SEEK_SET);
+    if (sz < 0) return -1;
+    *out = (int64_t)sz;
+    return 0;
+}
 #endif
 
 struct tokenizer {
@@ -24,6 +51,7 @@ struct tokenizer {
     int eos_id;
     int pad_id;
     int byte_fallback;  /* nonzero => <0xXX> fallback enabled */
+    int fold_case;      /* nonzero => normalize folded case at encode (P1-3) */
     trie_t *trie;       /* rebuilt by tokenizer_build_trie() */
     tokenizer_normalizer_hook_fn norm_hook;
     void *norm_userdata;
@@ -31,6 +59,9 @@ struct tokenizer {
 
 /* Set the thread-local last-error message (printf-style). */
 void tokenizer_set_error(const char *fmt, ...);
+
+/* Clear the thread-local last-error message (success path). */
+void tokenizer_clear_error(void);
 
 /* Allocate an empty tokenizer shell (no pieces). */
 tokenizer_t *tokenizer_create(int unk_id, int bos_id, int eos_id, int pad_id,

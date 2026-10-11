@@ -27,6 +27,10 @@ uint32_t nfkc_compose(uint32_t a, uint32_t b);
 void nfkc_normalize_cps(const uint32_t *cps, size_t n,
                         uint32_t **out, size_t *out_count);
 
+/* Pre-warm the internal lookup tables from a single-threaded entry point
+ * (model load / training), eliminating the lazy-init race. */
+void nfkc_prewarm(void);
+
 #ifdef __cplusplus
 }
 #endif

@@ -189,7 +189,12 @@ int tokenizer_export_sentencepiece(const tokenizer_t *tok, const char *path) {
         if (o + 2 > cap) { free(buf); return -1; }
         o += 2;
         size_t body = o;
-        pb_str(buf, cap, &o, 1, "identity", 8);
+        /* P1-9: 与真实管线对齐——normalize.c 执行完整 NFKC（UAX #15）；
+         * nmt_nfkc 是 SentencePiece 中最接近的实现（full-width 折叠、
+         * 兼容分解等），并保留 escape_whitespaces=true（field 5 不变）。
+         * 注意：控制符剥离 / 零宽字符剔除等细节在 NormalizerSpec 中
+         * 无一一对应的字段，外部加载方行为仍可能存在细微偏差。 */
+        pb_str(buf, cap, &o, 1, "nmt_nfkc", 8);
         pb_varint(buf, cap, &o, 3, 0); /* add_dummy_prefix = false */
         pb_varint(buf, cap, &o, 4, 0); /* remove_extra_whitespaces = false */
         pb_varint(buf, cap, &o, 5, 1); /* escape_whitespaces = true */
@@ -223,6 +228,7 @@ int tokenizer_export_sentencepiece(const tokenizer_t *tok, const char *path) {
         tokenizer_set_error("sp: short write");
         return -1;
     }
+    tokenizer_clear_error(); /* P1-4 */
     return 0;
 }
 
@@ -231,6 +237,7 @@ int tokenizer_export_sentencepiece(const tokenizer_t *tok, const char *path) {
 /* ------------------------------------------------------------------ */
 typedef struct {
     char **pieces;
+    size_t *lens;       /* real piece byte lengths (P1-7) */
     float *scores;
     int *types;
     int count, cap;
@@ -239,6 +246,7 @@ typedef struct {
 static void sp_list_free(sp_piece_list *l) {
     for (int i = 0; i < l->count; i++) free(l->pieces[i]);
     free(l->pieces);
+    free(l->lens);
     free(l->scores);
     free(l->types);
     memset(l, 0, sizeof(*l));
@@ -248,15 +256,22 @@ static int sp_list_push(sp_piece_list *l, const char *p, size_t plen,
                         float score, int type) {
     if (l->count >= l->cap) {
         int ncap = l->cap ? l->cap * 2 : 64;
-        char **np = (char **)realloc(l->pieces, (size_t)ncap * sizeof(char *));
-        if (!np) return -1;
-        l->pieces = np;
-        float *ns = (float *)realloc(l->scores, (size_t)ncap * sizeof(float));
-        if (!ns) return -1;
-        l->scores = ns;
-        int *nt = (int *)realloc(l->types, (size_t)ncap * sizeof(int));
-        if (!nt) return -1;
-        l->types = nt;
+        char **np = (char **)malloc((size_t)ncap * sizeof(char *));
+        size_t *nl = (size_t *)malloc((size_t)ncap * sizeof(size_t));
+        float *ns = (float *)malloc((size_t)ncap * sizeof(float));
+        int *nt = (int *)malloc((size_t)ncap * sizeof(int));
+        if (!np || !nl || !ns || !nt) {
+            free(np); free(nl); free(ns); free(nt);
+            return -1;
+        }
+        if (l->count > 0) {
+            memcpy(np, l->pieces, (size_t)l->count * sizeof(char *));
+            memcpy(nl, l->lens, (size_t)l->count * sizeof(size_t));
+            memcpy(ns, l->scores, (size_t)l->count * sizeof(float));
+            memcpy(nt, l->types, (size_t)l->count * sizeof(int));
+        }
+        free(l->pieces); free(l->lens); free(l->scores); free(l->types);
+        l->pieces = np; l->lens = nl; l->scores = ns; l->types = nt;
         l->cap = ncap;
     }
     char *copy = (char *)malloc(plen + 1);
@@ -264,6 +279,7 @@ static int sp_list_push(sp_piece_list *l, const char *p, size_t plen,
     memcpy(copy, p, plen);
     copy[plen] = '\0';
     l->pieces[l->count] = copy;
+    l->lens[l->count] = plen;
     l->scores[l->count] = score;
     l->types[l->count] = type;
     l->count++;
@@ -413,10 +429,11 @@ tokenizer_t *tokenizer_load_sentencepiece(const char *path) {
         tokenizer_set_error("sp: cannot open %s", path);
         return NULL;
     }
-    fseek(fp, 0, SEEK_END);
-    long sz = ftell(fp);
-    fseek(fp, 0, SEEK_SET);
-    if (sz <= 0) { fclose(fp); tokenizer_set_error("sp: empty model file"); return NULL; }
+    nfkc_prewarm(); /* P2-7: single-threaded prewarm before lazy access */
+    int64_t sz = 0;
+    if (file_size64(fp, &sz) != 0 || sz <= 0) {
+        fclose(fp); tokenizer_set_error("sp: empty model file"); return NULL;
+    }
     unsigned char *buf = (unsigned char *)malloc((size_t)sz);
     if (!buf) { fclose(fp); tokenizer_set_error("sp: OOM"); return NULL; }
     size_t rd = fread(buf, 1, (size_t)sz, fp);
@@ -504,7 +521,7 @@ tokenizer_t *tokenizer_load_sentencepiece(const char *path) {
     }
     for (int i = 0; i < vsz; i++) {
         if (tokenizer_set_piece(tok, i, pieces.pieces[i],
-                                strlen(pieces.pieces[i]), pieces.scores[i]) != 0) {
+                                pieces.lens[i], pieces.scores[i]) != 0) {
             sp_list_free(&pieces);
             tokenizer_free(tok);
             tokenizer_set_error("sp: OOM");
@@ -517,6 +534,7 @@ tokenizer_t *tokenizer_load_sentencepiece(const char *path) {
         tokenizer_set_error("sp: trie build failed");
         return NULL;
     }
+    tokenizer_clear_error();
     return tok;
 }
 
@@ -594,15 +612,15 @@ int tokenizer_export_json(const tokenizer_t *tok, const char *json_path) {
     fprintf(fp, "    \"type\": \"Unigram\",\n");
     fprintf(fp, "    \"byte_fallback\": %s,\n", tok->byte_fallback ? "true" : "false");
     fprintf(fp, "    \"unk_id\": %d,\n", tok->unk_id);
-    fprintf(fp, "    \"vocab\": {\n");
+    fprintf(fp, "    \"vocab\": [\n");
     for (int i = 0; i < tok->vocab_size; i++) {
-        fprintf(fp, "      \"");
+        fprintf(fp, "      [\"");
         jstr(fp, tok->pieces[i], (size_t)tok->piece_lens[i]);
-        fprintf(fp, "\": ");
+        fprintf(fp, "\", ");
         jscore(fp, tok->scores[i]);
-        fprintf(fp, "%s\n", (i + 1 < tok->vocab_size) ? "," : "");
+        fprintf(fp, "]%s\n", (i + 1 < tok->vocab_size) ? "," : "");
     }
-    fprintf(fp, "    }\n");
+    fprintf(fp, "    ]\n");
     fprintf(fp, "  },\n");
     jspecial(fp, tok, tok->unk_id, "unk");
     fprintf(fp, ",\n");
@@ -615,5 +633,6 @@ int tokenizer_export_json(const tokenizer_t *tok, const char *json_path) {
     fprintf(fp, "  \"tokenizer_class\": \"Unigram\"\n");
     fprintf(fp, "}\n");
     fclose(fp);
+    tokenizer_clear_error(); /* P1-4 */
     return 0;
 }

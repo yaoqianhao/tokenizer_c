@@ -137,8 +137,14 @@ char *normalize_text(const char *text, size_t len,
     uint32_t *norm = NULL;
     size_t nn = 0;
     nfkc_normalize_cps(cps, nc, &norm, &nn);
-    uint32_t *work = norm ? norm : cps; /* OOM fallback: identity */
-    size_t wn = norm ? nn : nc;
+    if (!norm) {
+        /* 额外发现 2: OOM during NFKC — fail loudly instead of silently
+         * degrading to identity (consistent with "truncation == failure"). */
+        free(cps);
+        return NULL;
+    }
+    uint32_t *work = norm;
+    size_t wn = nn;
     /* Pass 3: optional ASCII case folding. */
     if (fold_case) {
         for (size_t k = 0; k < wn; k++) {
@@ -146,7 +152,7 @@ char *normalize_text(const char *text, size_t len,
         }
     }
     /* Pass 4: encode back to UTF-8 (space -> ▁ when mark_spaces). */
-    size_t outcap = wn * 4 + 8;
+    size_t outcap = 64;
     char *out = (char *)malloc(outcap);
     if (!out) {
         free(cps);
@@ -157,26 +163,37 @@ char *normalize_text(const char *text, size_t len,
     for (size_t k = 0; k < wn; k++) {
         uint32_t cp = work[k];
         if (mark_spaces && cp == 0x0020) {
-            if (o + 3 >= outcap) break;
+            if (o + 3 > outcap) {
+                size_t ncap = outcap * 2;
+                char *nb = (char *)realloc(out, ncap);
+                if (!nb) goto oom_out;
+                out = nb; outcap = ncap;
+            }
             memcpy(out + o, kSpaceMark, 3);
             o += 3;
             continue;
         }
         char eb[4];
         int nb = utf8_encode(cp, eb);
-        if (nb <= 0) {
-            if (o + 1 >= outcap) break;
-            out[o++] = '?'; /* unmappable cp -> replacement char */
-        } else {
-            if (o + (size_t)nb >= outcap) break;
-            memcpy(out + o, eb, (size_t)nb);
-            o += (size_t)nb;
+        if (nb <= 0) { nb = 1; eb[0] = '?'; }
+        if (o + (size_t)nb > outcap) {
+            size_t ncap = (outcap * 2 > o + (size_t)nb) ? outcap * 2
+                                                        : o + (size_t)nb;
+            char *nb2 = (char *)realloc(out, ncap);
+            if (!nb2) goto oom_out;
+            out = nb2; outcap = ncap;
         }
+        memcpy(out + o, eb, (size_t)nb);
+        o += (size_t)nb;
     }
-    if (o >= outcap) o = outcap - 1;
     out[o] = '\0';
     free(cps);
     if (norm) free(norm);
     if (out_len) *out_len = o;
     return out;
+oom_out:
+    free(cps);
+    if (norm) free(norm);
+    free(out);
+    return NULL;
 }
