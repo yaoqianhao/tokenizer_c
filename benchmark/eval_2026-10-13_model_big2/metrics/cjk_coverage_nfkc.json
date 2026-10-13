@@ -1,0 +1,46 @@
+{
+ "model_big2": {
+  "distinct_cjk": 4113,
+  "single_char_pieces": 968,
+  "distinct_coverage_pct": 22.95,
+  "occurrence_coverage_pct": 79.31
+ },
+ "model_big": {
+  "distinct_cjk": 4113,
+  "single_char_pieces": 978,
+  "distinct_coverage_pct": 22.83,
+  "occurrence_coverage_pct": 79.31
+ },
+ "model_256k": {
+  "distinct_cjk": 4113,
+  "single_char_pieces": 427,
+  "distinct_coverage_pct": 10.38,
+  "occurrence_coverage_pct": 67.28
+ },
+ "nfkc": {
+  "var_lines_tested": 200,
+  "var_mismatch": 40,
+  "clean_lines_tested": 200,
+  "clean_mismatch": 40,
+  "example": {
+   "orig": "在武汉大会上，与会代表就杭州展开了深入讨论，达成了多项共识。",
+   "decoded": "在武汉大会上,与会代表就杭州展开了深入讨论,达成了多项共识。 随着供应链的快速发展,优化已经成为西安领域的焦点话题。 基础设施表示,上海是计算机视觉的重要基础,未来将在隐私保护方面发挥更大作用。 本文从大语言模型的角度出发,分析了天津在网络",
+   "first_diffs": [
+    {
+     "pos": 6,
+     "orig": "，",
+     "decoded": ",",
+     "orig_u": "U+FF0C",
+     "dec_u": "U+002C"
+    },
+    {
+     "pos": 21,
+     "orig": "，",
+     "decoded": ",",
+     "orig_u": "U+FF0C",
+     "dec_u": "U+002C"
+    }
+   ]
+  }
+ }
+}

@@ -1,0 +1,48 @@
+--- a/src/tokenizer.c
++++ b/src/tokenizer.c
+@@ -88,7 +88,22 @@
+ static int tokenizer_ensure_piece_slots(tokenizer_t *tok, int need) {
+     if (need < 0 || need > 100000000) return -1; /* sanity */
+-    char **np = (char **)malloc((size_t)need * sizeof(char *));
+-    int *nl = (int *)malloc((size_t)need * sizeof(int));
+-    float *ns = (float *)malloc((size_t)need * sizeof(float));
++    if (need <= tok->cap_slots) {
++        /* capacity already sufficient: just publish the extra empty slots */
++        if (need > tok->vocab_size) {
++            for (int i = tok->vocab_size; i < need; i++) {
++                tok->pieces[i] = NULL;
++                tok->piece_lens[i] = 0;
++                tok->scores[i] = 0.0f;
++            }
++            tok->vocab_size = need;
++        }
++        return 0;
++    }
++    /* amortized growth: doubling avoids the O(vocab^2) copy pattern on load */
++    int newcap = tok->cap_slots > 0 ? tok->cap_slots : 1024;
++    while (newcap < need) newcap *= 2;
++    char **np = (char **)malloc((size_t)newcap * sizeof(char *));
++    int *nl = (int *)malloc((size_t)newcap * sizeof(int));
++    float *ns = (float *)malloc((size_t)newcap * sizeof(float));
+     if (!np || !nl || !ns) {
+         free(np); free(nl); free(ns);
+@@ -106,9 +121,10 @@
+     tok->piece_lens = nl;
+     tok->scores = ns;
+-    for (int i = tok->vocab_size; i < need; i++) {
++    for (int i = tok->vocab_size; i < newcap; i++) {
+         tok->pieces[i] = NULL;
+         tok->piece_lens[i] = 0;
+         tok->scores[i] = 0.0f;
+     }
++    tok->cap_slots = newcap;
+     tok->vocab_size = need;
+     return 0;
+--- a/src/tokenizer_internal.h
++++ b/src/tokenizer_internal.h
+@@ -44,4 +44,5 @@
+ struct tokenizer {
+     int vocab_size;
++    int cap_slots;      /* allocated slots (>= vocab_size) */
+     char **pieces;      /* piece byte strings (malloc'ed) */
+     int *piece_lens;    /* piece byte lengths */

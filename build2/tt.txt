@@ -1,8 +1,0 @@
-FAIL [tests/test_tokenizer.c:200] json contains Unigram type
-FAIL [tests/test_tokenizer.c:269] sp load succeeds
-FAIL [tests/test_tokenizer.c:302] tokenizer_load dispatches .model extension
-FAIL [tests/test_tokenizer.c:366] nfkc mapping correct
-  nfkc in='℮' want='e' got='℮'
-FAIL [tests/test_tokenizer.c:381] nfkc legacy whitespace mapping
-  legacy in='hello 世界' got='hello 世界 '
-FAILED: 5/85 checks failed

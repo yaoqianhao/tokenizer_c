@@ -2,12 +2,14 @@
 AIGC:
     Label: "1"
     ContentProducer: 001191440300708461136T1XGW3
-    ProduceID: 04526fdd866a8c5c9aceee6b83ed2c05_7129461cc55611f1820a525400638852
-    ReservedCode1: fbkUTPw/4eLrK9URJenvl0MGZfuJcFzQVynDJ8r+nyLz6z5zSna6vJmsGtlG5Piu9EiOlK6OT+8izYcMItL6lD1EAqT5BUwR4mp7a21TDAVkHwgKc73PT5+4bBpKsVR8HY+R5aIzdIMLCCGYnas0R6RL+Jx3eDJT4yJSjv6b9ykx4gIMj8Mqk9C+9YU=
+    ProduceID: 04526fdd866a8c5c9aceee6b83ed2c05_6e03136fc5e111f1a08152540064ee0f
+    ReservedCode1: OWHMxvw+noJwEHJjJbzI0rBLDMshzMnNKxPRwWq7n3YY1zZxgsfLyjj/uXhaRL13PoeS4F4KdSOcFcH4/SrCwoGWwIcft4oYprDw1Amhm6BUE9Tq2CszVFaV/faAjgqTpQNbvqpgcWFS8yASpfjlFJreWKDzirIhsklaMsUxjmqK3aKkQ2hVvm/MJuM=
     ContentPropagator: 001191440300708461136T1XGW3
-    PropagateID: 04526fdd866a8c5c9aceee6b83ed2c05_7129461cc55611f1820a525400638852
-    ReservedCode2: fbkUTPw/4eLrK9URJenvl0MGZfuJcFzQVynDJ8r+nyLz6z5zSna6vJmsGtlG5Piu9EiOlK6OT+8izYcMItL6lD1EAqT5BUwR4mp7a21TDAVkHwgKc73PT5+4bBpKsVR8HY+R5aIzdIMLCCGYnas0R6RL+Jx3eDJT4yJSjv6b9ykx4gIMj8Mqk9C+9YU=
+    PropagateID: 04526fdd866a8c5c9aceee6b83ed2c05_6e03136fc5e111f1a08152540064ee0f
+    ReservedCode2: OWHMxvw+noJwEHJjJbzI0rBLDMshzMnNKxPRwWq7n3YY1zZxgsfLyjj/uXhaRL13PoeS4F4KdSOcFcH4/SrCwoGWwIcft4oYprDw1Amhm6BUE9Tq2CszVFaV/faAjgqTpQNbvqpgcWFS8yASpfjlFJreWKDzirIhsklaMsUxjmqK3aKkQ2hVvm/MJuM=
 ---
+
+
 
 # tokenizer-c — 工业级 Unigram Tokenizer（纯 C 实现）
 
@@ -191,7 +193,36 @@ tok-cli train --corpus corpus_big.txt --model model_256k.tkm \
 - **断点续训**：脚本内置 `--ckpt E:\tokenizer_c\model_big.ckpt`，若该文件已存在会自动检测并从断点续训（跳过 seed），**直接重跑本脚本即可续训**。
 - **耗时预估**：`iters=8` 约 110~140 小时（种子约 3~4h + 每轮 EM 约 10~14h）。
 
-### 6.4 encode —— 编码文本
+### 6.4 训练语料说明
+
+训练语料 `corpus_big/corpus_big.txt` 约 3.28 GB（精确 3,522,679,232 字节，UTF-8，每行一段文本），由 `corpus_big/` 下三个子目录语料按 **en → zh → code 顺序直接拼接** 而成，随提交 `585102a`（"add big lan data and train code"）加入仓库：
+
+| 子语料 | 文件 | 大小（字节） | 行数 | 原始来源（HuggingFace 数据集） |
+|---|---|---|---|---|
+| 英文 | `corpus_big/en/en.txt` | 2,312,810,695 | 9,093,878 | `allenai/c4`（en，train 分片） |
+| 中文 | `corpus_big/zh/zh.txt` | 504,969,474 | 3,679,146 | `pleisto/wikipedia-cn-20230720-filtered`（train） |
+| 代码 | `corpus_big/code/code.txt` | 704,899,063 | 17,303,336 | 仓库未保留原始下载缓存（内容以 JavaScript 等开源代码文本为主） |
+
+**拼接校验**：合并文件行数 30,076,360 与字节数均精确等于三者之和（9,093,878 + 3,679,146 + 17,303,336 = 30,076,360）；边界行（第 9,093,879 行、第 12,773,025 行）与 `zh/zh.txt`、`code/code.txt` 首行逐字节一致；合并文件首行为 `en/en.txt` 首行。训练日志 `train_big.log.err` 确认加载 `corpus lines: 30,076,360`。
+
+**下载方式**：经 HuggingFace `datasets` 库 streaming 模式下载，原始分片缓存在 `corpus_big/_hf_cache/`（标准 HF 缓存目录，含下载元数据）：
+
+- **英文**：缓存 `_hf_cache/en/c4-train.00000~00002-of-01024.json.gz`（3 个分片，各约 318~320 MB）；
+- **中文**：缓存 `_hf_cache/wikipedia-cn-20230720-filtered.json`（JSONL，含 prompt/completion 字段，约 101.8 万条）与 `_hf_cache/data/train-00000~00002-of-01126.parquet`（分片）；
+- **代码**：`_hf_cache/` 中无对应缓存，具体数据集不可从仓库证实。
+
+**数据源配置**（与 `benchmark/download_corpus.py` 声明一致，`datasets.load_dataset(..., streaming=True)`，主源加载失败自动回退）：
+
+| 语言 | 首选数据源 | 回退数据源 |
+|---|---|---|
+| en | `wikitext/wikitext-103-raw-v1`（split=test） | `allenai/c4`（split=train）——缓存证实实际使用 |
+| zh | `pleisto/wikipedia-cn-20230720-filtered`（split=train）——缓存证实实际使用 | `csebuetnlp/xwikis` |
+| code | `codeparrot/github-code`（py/js/java） | `bigcode/the-stack`（split=train） |
+| multilingual | `facebook/flores`（devtest） | `Helsinki-NLP/opus-100`（en-de，train） |
+
+> 说明：海量训练语料仅含 en/zh/code 三类（无 multilingual 行）；原始下载脚本中单行超过 4000 字节会被截断（`download_corpus.py` 行为）；仓库内未见针对这 3.28 GB 语料的独立过滤/分类脚本（与评测语料 `corpus_64mb.txt` 由 `scripts/split_corpus.py` 按 CJK / 代码特征 / 其余规则分类切分不同，详见 §13.1）。
+
+### 6.5 encode —— 编码文本
 
 ```bash
 tok-cli encode --model model.tkm --text "hello world"
@@ -200,7 +231,7 @@ tok-cli encode --model model.tkm --file input.txt
 
 输出：空格分隔的十进制 id 序列；`--model` 传 `.model` 后缀自动走 SentencePiece 加载路径。
 
-### 6.5 decode —— 解码 id
+### 6.6 decode —— 解码 id
 
 ```bash
 tok-cli decode --model model.tkm --ids "1 2 3 4 5"
@@ -536,4 +567,5 @@ python benchmark\eval_metrics.py ^
 - `benchmark/tokenizer_comparison_report.md`：多厂商 tokenizer 对比报告
 - `benchmark/tokenizer_c_benchmark_comparison.md`：厂商 vs tokenizer_c 汇总对比
 - `benchmark/qwen_tokenizer_eval_report.md`：Qwen2.5 tokenizer 评测
+*（内容由AI生成，仅供参考）*
 *（内容由AI生成，仅供参考）*

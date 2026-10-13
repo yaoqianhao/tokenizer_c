@@ -1,0 +1,41 @@
+tok-cli-fast.exe 语义等价性与可复现性验证记录
+生成日期：2026-10-13（归档时补记）
+受测模型：E:\tokenizer_c\model_big2.tkm（vocab 262,144）
+
+一、为什么需要加速版 CLI
+  原版 E:\tokenizer_c\build\tok-cli.exe 单次调用加载 model_big2.tkm 需 65.3 s / 66.3 s（两次实测），
+  而 eval_metrics.py 全套指标需上千次 CLI 进程调用，单模型即需 7 小时以上，评测不可行；
+  加速版把加载降到 0.09 s，单模型全套指标 53 s 跑完。
+
+二、改动范围（唯一改动，全文见 patch_tokenizer_fast_2026-10-13.patch）
+  src/tokenizer.c           tokenizer_ensure_piece_slots()：扩容由"按 need 重新 malloc 并整体拷贝"
+                            改为倍增扩容并新增 cap_slots 容量字段；容量已足够时仅发布新空槽、不再重分配。
+  src/tokenizer_internal.h  struct tokenizer 增加 int cap_slots;（已分配槽位数，>= vocab_size）
+  cli/main.c、include/tokenizer.h 未改动；.tkm 读取/解析、encode/decode 算法逻辑未改动。
+
+三、语义等价性验证（2026-10-13 评测前，本次评测采用加速版的前提）
+  样本：benchmark\corpus\{en,zh,code} 各取 1.5 MB 切片
+  方法：原版 build\tok-cli.exe 与加速版 tok-cli-fast.exe 分别 encode 同一文件，输出逐字节比对
+  结果：三语种输出完全一致，互不相同的 MD5 一个都没有
+    en   1,499,932 B 切片 -> 两版输出 MD5 一致 (UTF-16 落盘产物 10EF0F527E3506735ED173357CB8A04D)
+    zh   1,499,904 B 切片 -> 两版输出 MD5 一致 (UTF-16 落盘产物 1956432B2956E88E5A0FCB4DBC7A5356)
+    code 1,499,889 B 切片 -> 两版输出 MD5 一致 (UTF-16 落盘产物 D69D636EBC1F92AB5158DC31E84D6E65)
+
+四、归档可复现性验证（归档时执行）
+  步骤：按 cli-fast\build_fast_from_patch.ps1，从 E:\tokenizer_c 现场源码 src/include/cli/tests 拷贝，
+        覆盖 changed_src\tokenizer.c 与 changed_src\tokenizer_internal.h，gcc 重新编译 libtokenizer.a 与 tok-cli-fast.exe
+  结果：重建 exe 260,929 B（与归档 exe 尺寸一致）；对同一 en/zh/code 1.5 MB 切片 encode，
+        输出与归档 exe 逐字节一致（按文本归一化后的 MD5）：
+        en   E5B9C985E1141E80FC41C6FA82ECB88E
+        zh   BD9F77242233BFC6F97034BAB1B911A4
+        code 57EF347869B3A46815FE038A192E92B6
+        且与第三节"评测期间加速版输出"一致（同样归一化后逐字节相同），即：
+        原版 CLI 输出 = 评测用加速版输出 = 归档 exe 输出 = 按归档脚本重建 exe 输出
+  命令：powershell -NoProfile -ExecutionPolicy Bypass -File .\cli-fast\build_fast_from_patch.ps1 `
+          -ProjectRoot E:\tokenizer_c -OutDir <任意临时目录>
+
+五、加载耗时对照（原版 vs 加速版，原始记录见 ..\logs\eval_run_summary.txt）
+  model_big2.tkm            原版 65.297 / 66.284 s  加速版 0.093 s
+  model_big.tkm             原版 71.128 / 72.135 s  加速版 0.089 s
+  benchmark\model_256k.tkm 原版 66.909 / 73.395 s  加速版 0.107 s
+（内容由AI生成，仅供参考）

@@ -1,0 +1,157 @@
+{
+ "project": {
+  "model_big2": {
+   "eval_en": 4.5896,
+   "eval_zh": 2.4851,
+   "eval_code": 4.1009,
+   "real_en": 4.5598,
+   "real_zh": 2.3746,
+   "real_code": 3.3796
+  },
+  "model_big": {
+   "eval_en": 4.6096,
+   "eval_zh": 2.4795,
+   "eval_code": 4.1135,
+   "real_en": 4.5804,
+   "real_zh": 2.3726,
+   "real_code": 3.3676
+  },
+  "model_256k": {
+   "eval_en": 7.4338,
+   "eval_zh": 8.1546,
+   "eval_code": 7.2806,
+   "real_en": 1.4969,
+   "real_zh": 1.7289,
+   "real_code": 1.4353
+  }
+ },
+ "vendor": {
+  "qwen1.5B": {
+   "eval_en": 6.1173,
+   "eval_zh": 5.3193,
+   "eval_code": 4.064,
+   "real_en": 4.6049,
+   "real_zh": 4.3911,
+   "real_code": 4.2522
+  },
+  "grok": {
+   "eval_en": 6.1179,
+   "eval_zh": 4.1304,
+   "eval_code": 4.0704,
+   "real_en": 4.6657,
+   "real_zh": 3.6904,
+   "real_code": 4.2061
+  },
+  "doubao": {
+   "eval_en": 5.7195,
+   "eval_zh": 5.1709,
+   "eval_code": 3.8447,
+   "real_en": 4.5132,
+   "real_zh": 4.3739,
+   "real_code": 3.7229
+  },
+  "gpt6": {
+   "eval_en": 6.1187,
+   "eval_zh": 4.3601,
+   "eval_code": 4.2548,
+   "real_en": 4.7703,
+   "real_zh": 3.6959,
+   "real_code": 4.2447
+  },
+  "hunyuan": {
+   "eval_en": 6.1173,
+   "eval_zh": 5.4991,
+   "eval_code": 4.0642,
+   "real_en": 4.6039,
+   "real_zh": 4.5382,
+   "real_code": 4.2509
+  }
+ },
+ "validate": {
+  "qwen1.5B": {
+   "en": {
+    "mine": 2598360,
+    "published": 2598360,
+    "dev_pct": 0.0
+   },
+   "zh": {
+    "mine": 1989620,
+    "published": 1989620,
+    "dev_pct": 0.0
+   },
+   "code": {
+    "mine": 2603296,
+    "published": 2614361,
+    "dev_pct": -0.423
+   }
+  },
+  "grok": {
+   "en": {
+    "mine": 2598109,
+    "published": 2598109,
+    "dev_pct": 0.0
+   },
+   "zh": {
+    "mine": 2560438,
+    "published": 2560438,
+    "dev_pct": 0.0
+   },
+   "code": {
+    "mine": 2599248,
+    "published": 2610313,
+    "dev_pct": -0.424
+   }
+  },
+  "doubao": {
+   "en": {
+    "mine": 2778533,
+    "published": 2778533,
+    "dev_pct": 0.0
+   },
+   "zh": {
+    "mine": 2046213,
+    "published": 2046213,
+    "dev_pct": 0.0
+   },
+   "code": {
+    "mine": 2752590,
+    "published": 2752590,
+    "dev_pct": 0.0
+   }
+  },
+  "gpt6": {
+   "en": {
+    "mine": 2597712,
+    "published": 2597712,
+    "dev_pct": 0.0
+   },
+   "zh": {
+    "mine": 2424800,
+    "published": 2424800,
+    "dev_pct": 0.0
+   },
+   "code": {
+    "mine": 2488189,
+    "published": 2499254,
+    "dev_pct": -0.443
+   }
+  },
+  "hunyuan": {
+   "en": {
+    "mine": 2598360,
+    "published": 2598360,
+    "dev_pct": 0.0
+   },
+   "zh": {
+    "mine": 1925026,
+    "published": 1925026,
+    "dev_pct": 0.0
+   },
+   "code": {
+    "mine": 2603171,
+    "published": 2614236,
+    "dev_pct": -0.423
+   }
+  }
+ }
+}

@@ -1,0 +1,29 @@
+{
+ "zh_lines": 80694,
+ "nfkc_var_lines": 36419,
+ "A_var_lines": 60,
+ "A_mismatch": 60,
+ "B_clean_lines": 60,
+ "B_mismatch": 0,
+ "example_A": {
+  "orig": "在武汉大会上，与会代表就杭州展开了深入讨论，达成了多项共识。",
+  "decoded": "在武汉大会上,与会代表就杭州展开了深入讨论,达成了多项共识。",
+  "diff": [
+   {
+    "pos": 6,
+    "orig": "，",
+    "orig_u": "U+FF0C",
+    "dec": ",",
+    "dec_u": "U+002C"
+   },
+   {
+    "pos": 21,
+    "orig": "，",
+    "orig_u": "U+FF0C",
+    "dec": ",",
+    "dec_u": "U+002C"
+   }
+  ]
+ },
+ "example_B": null
+}

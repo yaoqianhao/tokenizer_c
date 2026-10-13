@@ -1,0 +1,431 @@
+{
+ "meta": {
+  "date": "2026-10-13",
+  "corpus": "benchmark/corpus/{en,zh,code} (合计 37.1MB)",
+  "note": "本项目三款模型经 tok-cli-fast(C++ CLI) 跑测；厂商基线为原生 Python 绑定跑测，吞吐/加载不可直接横比，其余指标同脚本同语料同口径",
+  "tool": "benchmark/eval_metrics.py"
+ },
+ "models": {
+  "model_big2": {
+   "kind": "本项目-二代",
+   "harness": "tok-cli-fast(C++)",
+   "source_file": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\output\\eval_metrics_model_big2.json",
+   "vocab_size": 262144,
+   "bpt": {
+    "en": 4.588941,
+    "zh": 2.482838,
+    "code": 4.109665
+   },
+   "tokens": {
+    "en": 3465038,
+    "zh": 4255802,
+    "code": 2589306
+   },
+   "chars_per_token": {
+    "en": 4.588941,
+    "zh": 0.852894,
+    "code": 4.109665
+   },
+   "bytes_total": 37108500,
+   "tokens_total": 10310146,
+   "bpt_total": 3.599222,
+   "roundtrip_ok": false,
+   "roundtrip_mismatch_zh": 85,
+   "stability_overall": 0.855383,
+   "stability_zh": 0.98997,
+   "utf8_completeness": 0.879285,
+   "char_split_rate": 0.172494,
+   "boundary_crossing_rate": 0.0,
+   "operator_isolation": 0.433334,
+   "digit_boundary_f1": 0.4,
+   "digit_split_variability": 1.660272,
+   "oov_rate": {
+    "en": null,
+    "zh": null,
+    "code": null
+   },
+   "encode_tps": 1064807.827,
+   "decode_tps": 53764.333,
+   "load_ms": 80.195
+  },
+  "model_big": {
+   "kind": "本项目-一代",
+   "harness": "tok-cli-fast(C++)",
+   "source_file": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\output\\eval_metrics_model_big.json",
+   "vocab_size": 262144,
+   "bpt": {
+    "en": 4.608317,
+    "zh": 2.477135,
+    "code": 4.12199
+   },
+   "tokens": {
+    "en": 3450469,
+    "zh": 4265600,
+    "code": 2581564
+   },
+   "chars_per_token": {
+    "en": 4.608317,
+    "zh": 0.850935,
+    "code": 4.12199
+   },
+   "bytes_total": 37108500,
+   "tokens_total": 10297633,
+   "bpt_total": 3.603595,
+   "roundtrip_ok": false,
+   "roundtrip_mismatch_zh": 85,
+   "stability_overall": 0.854505,
+   "stability_zh": 0.990105,
+   "utf8_completeness": 0.879549,
+   "char_split_rate": 0.172494,
+   "boundary_crossing_rate": 0.0,
+   "operator_isolation": 0.366667,
+   "digit_boundary_f1": 0.466667,
+   "digit_split_variability": 1.58681,
+   "oov_rate": {
+    "en": null,
+    "zh": null,
+    "code": null
+   },
+   "encode_tps": 1076844.743,
+   "decode_tps": 59869.452,
+   "load_ms": 77.233
+  },
+  "model_256k": {
+   "kind": "本项目-256K历史版",
+   "harness": "tok-cli-fast(C++)",
+   "source_file": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\output\\eval_metrics_model_256k.json",
+   "vocab_size": 262144,
+   "bpt": {
+    "en": 7.397133,
+    "zh": 7.995521,
+    "code": 7.231549
+   },
+   "tokens": {
+    "en": 2149597,
+    "zh": 1321548,
+    "code": 1471494
+   },
+   "chars_per_token": {
+    "en": 7.397133,
+    "zh": 2.746587,
+    "code": 7.231549
+   },
+   "bytes_total": 37108500,
+   "tokens_total": 4942639,
+   "bpt_total": 7.507831,
+   "roundtrip_ok": false,
+   "roundtrip_mismatch_zh": 85,
+   "stability_overall": 0.709296,
+   "stability_zh": 0.835437,
+   "utf8_completeness": 1.0,
+   "char_split_rate": 0.0,
+   "boundary_crossing_rate": 0.0,
+   "operator_isolation": 0.983334,
+   "digit_boundary_f1": 0.5,
+   "digit_split_variability": 0.965837,
+   "oov_rate": {
+    "en": null,
+    "zh": null,
+    "code": null
+   },
+   "encode_tps": 360379.057,
+   "decode_tps": 37024.7,
+   "load_ms": 108.528
+  },
+  "qwen_1.5B": {
+   "kind": "厂商基线",
+   "harness": "原生Python绑定",
+   "source_file": "E:\\tokenizer_c\\benchmark\\qwen_1.5B_eval.json",
+   "vocab_size": 151643,
+   "bpt": {
+    "en": 6.119573,
+    "zh": 5.310796,
+    "code": 4.07028
+   },
+   "tokens": {
+    "en": 2598360,
+    "zh": 1989620,
+    "code": 2614361
+   },
+   "chars_per_token": {
+    "en": 6.119573,
+    "zh": 1.824342,
+    "code": 4.07028
+   },
+   "bytes_total": 37108500,
+   "tokens_total": 7202341,
+   "bpt_total": 5.152283,
+   "roundtrip_ok": true,
+   "roundtrip_mismatch_zh": 0,
+   "stability_overall": 0.822958,
+   "stability_zh": 0.967099,
+   "utf8_completeness": 1.0,
+   "char_split_rate": 0.997669,
+   "boundary_crossing_rate": 0.0,
+   "operator_isolation": 0.166666,
+   "digit_boundary_f1": 0.403333,
+   "digit_split_variability": 0.0,
+   "oov_rate": {
+    "en": 0.0,
+    "zh": 0.0,
+    "code": 0.0
+   },
+   "encode_tps": 478380.034,
+   "decode_tps": 7875736.998,
+   "load_ms": 0.154
+  },
+  "qwen_7B": {
+   "kind": "厂商基线",
+   "harness": "原生Python绑定",
+   "source_file": "E:\\tokenizer_c\\benchmark\\qwen_7B_eval.json",
+   "vocab_size": 151643,
+   "bpt": {
+    "en": 6.119573,
+    "zh": 5.310796,
+    "code": 4.07028
+   },
+   "tokens": {
+    "en": 2598360,
+    "zh": 1989620,
+    "code": 2614361
+   },
+   "chars_per_token": {
+    "en": 6.119573,
+    "zh": 1.824342,
+    "code": 4.07028
+   },
+   "bytes_total": 37108500,
+   "tokens_total": 7202341,
+   "bpt_total": 5.152283,
+   "roundtrip_ok": true,
+   "roundtrip_mismatch_zh": 0,
+   "stability_overall": 0.822958,
+   "stability_zh": 0.967099,
+   "utf8_completeness": 1.0,
+   "char_split_rate": 0.997669,
+   "boundary_crossing_rate": 0.0,
+   "operator_isolation": 0.166666,
+   "digit_boundary_f1": 0.403333,
+   "digit_split_variability": 0.0,
+   "oov_rate": {
+    "en": 0.0,
+    "zh": 0.0,
+    "code": 0.0
+   },
+   "encode_tps": 470394.685,
+   "decode_tps": 7720897.616,
+   "load_ms": 0.188
+  },
+  "grok": {
+   "kind": "厂商基线",
+   "harness": "原生Python绑定",
+   "source_file": "E:\\tokenizer_c\\benchmark\\grok_eval.json",
+   "vocab_size": 131072,
+   "bpt": {
+    "en": 6.120164,
+    "zh": 4.126819,
+    "code": 4.076592
+   },
+   "tokens": {
+    "en": 2598109,
+    "zh": 2560438,
+    "code": 2610313
+   },
+   "chars_per_token": {
+    "en": 6.120164,
+    "zh": 1.417627,
+    "code": 4.076592
+   },
+   "bytes_total": 37108500,
+   "tokens_total": 7768860,
+   "bpt_total": 4.77657,
+   "roundtrip_ok": true,
+   "roundtrip_mismatch_zh": 0,
+   "stability_overall": 0.827247,
+   "stability_zh": 0.979377,
+   "utf8_completeness": 0.992352,
+   "char_split_rate": 0.006993,
+   "boundary_crossing_rate": 0.003824,
+   "operator_isolation": 0.966666,
+   "digit_boundary_f1": 0.403333,
+   "digit_split_variability": 0.0,
+   "oov_rate": {
+    "en": 0.0,
+    "zh": 0.0,
+    "code": 0.0
+   },
+   "encode_tps": 10736449.005,
+   "decode_tps": 47458899.909,
+   "load_ms": 0.048
+  },
+  "doubao": {
+   "kind": "厂商基线",
+   "harness": "原生Python绑定",
+   "source_file": "E:\\tokenizer_c\\benchmark\\doubao_eval.json",
+   "vocab_size": 155121,
+   "bpt": {
+    "en": 5.722752,
+    "zh": 5.163913,
+    "code": 3.865879
+   },
+   "tokens": {
+    "en": 2778533,
+    "zh": 2046213,
+    "code": 2752590
+   },
+   "chars_per_token": {
+    "en": 5.722752,
+    "zh": 1.773885,
+    "code": 3.865879
+   },
+   "bytes_total": 37108500,
+   "tokens_total": 7577336,
+   "bpt_total": 4.897302,
+   "roundtrip_ok": true,
+   "roundtrip_mismatch_zh": 0,
+   "stability_overall": 0.828295,
+   "stability_zh": 0.96747,
+   "utf8_completeness": 1.0,
+   "char_split_rate": 0.997669,
+   "boundary_crossing_rate": 0.0,
+   "operator_isolation": 0.166666,
+   "digit_boundary_f1": 0.403333,
+   "digit_split_variability": 0.0,
+   "oov_rate": {
+    "en": 0.0,
+    "zh": 0.0,
+    "code": 0.0
+   },
+   "encode_tps": 495890.954,
+   "decode_tps": 7737846.489,
+   "load_ms": 0.167
+  },
+  "gpt6": {
+   "kind": "厂商基线",
+   "harness": "原生Python绑定",
+   "source_file": "E:\\tokenizer_c\\benchmark\\gpt6_eval.json",
+   "vocab_size": 199998,
+   "bpt": {
+    "en": 6.1211,
+    "zh": 4.357665,
+    "code": 4.257743
+   },
+   "tokens": {
+    "en": 2597712,
+    "zh": 2424800,
+    "code": 2499254
+   },
+   "chars_per_token": {
+    "en": 6.1211,
+    "zh": 1.496926,
+    "code": 4.257743
+   },
+   "bytes_total": 37108500,
+   "tokens_total": 7521766,
+   "bpt_total": 4.933482,
+   "roundtrip_ok": true,
+   "roundtrip_mismatch_zh": 0,
+   "stability_overall": 0.826926,
+   "stability_zh": 0.975859,
+   "utf8_completeness": 1.0,
+   "char_split_rate": 0.997669,
+   "boundary_crossing_rate": 0.0,
+   "operator_isolation": 0.166666,
+   "digit_boundary_f1": 0.0,
+   "digit_split_variability": 0.0,
+   "oov_rate": {
+    "en": 0.0,
+    "zh": 0.0,
+    "code": 0.0
+   },
+   "encode_tps": 512912.311,
+   "decode_tps": 7797183.518,
+   "load_ms": 0.204
+  },
+  "hunyuan": {
+   "kind": "厂商基线",
+   "harness": "原生Python绑定",
+   "source_file": "E:\\tokenizer_c\\benchmark\\hunyuan_eval.json",
+   "vocab_size": 127957,
+   "bpt": {
+    "en": 6.119573,
+    "zh": 5.488999,
+    "code": 4.070475
+   },
+   "tokens": {
+    "en": 2598360,
+    "zh": 1925026,
+    "code": 2614236
+   },
+   "chars_per_token": {
+    "en": 6.119573,
+    "zh": 1.885557,
+    "code": 4.070475
+   },
+   "bytes_total": 37108500,
+   "tokens_total": 7137622,
+   "bpt_total": 5.199,
+   "roundtrip_ok": true,
+   "roundtrip_mismatch_zh": 0,
+   "stability_overall": 0.822046,
+   "stability_zh": 0.964362,
+   "utf8_completeness": 1.0,
+   "char_split_rate": 0.997669,
+   "boundary_crossing_rate": 0.0,
+   "operator_isolation": 0.166666,
+   "digit_boundary_f1": 0.403333,
+   "digit_split_variability": 0.0,
+   "oov_rate": {
+    "en": 0.0,
+    "zh": 0.0,
+    "code": 0.0
+   },
+   "encode_tps": 517972.542,
+   "decode_tps": 7453283.594,
+   "load_ms": 0.181
+  },
+  "baseline_2026-10-10": {
+   "kind": "历史报告(256K)",
+   "harness": "原生Python绑定",
+   "source_file": "E:\\tokenizer_c\\benchmark\\eval_report_2026-10-10.json",
+   "vocab_size": 262144,
+   "bpt": {
+    "en": 7.398844,
+    "zh": 7.934461,
+    "code": 7.21271
+   },
+   "tokens": {
+    "en": 2125836,
+    "zh": 1321548,
+    "code": 1453791
+   },
+   "chars_per_token": {
+    "en": 7.398844,
+    "zh": 2.685527,
+    "code": 7.21271
+   },
+   "bytes_total": 36700273,
+   "tokens_total": 4901175,
+   "bpt_total": 7.488056,
+   "roundtrip_ok": false,
+   "roundtrip_mismatch_zh": 85,
+   "stability_overall": 0.709022,
+   "stability_zh": 0.835437,
+   "utf8_completeness": 1.0,
+   "char_split_rate": 0.0,
+   "boundary_crossing_rate": 0.0,
+   "operator_isolation": 0.983334,
+   "digit_boundary_f1": 0.5,
+   "digit_split_variability": 0.965837,
+   "oov_rate": {
+    "en": null,
+    "zh": null,
+    "code": null
+   },
+   "encode_tps": 90310.777,
+   "decode_tps": 7293.054,
+   "load_ms": 479.932
+  }
+ },
+ "missing_files": []
+}
