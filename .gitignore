@@ -12,3 +12,51 @@ __pycache__/
 # 评测运行痕迹
 benchmark/eval_run.err
 benchmark/eval_run.pid
+
+# ===== 语料 / 数据集（体积大，放 HF Hub 或网盘，不入库）=====
+corpus_big/
+benchmark/corpus/
+benchmark/corpus_64mb.txt
+benchmark/corpus_small.txt
+_hf_cache/
+*.parquet
+*.jsonl
+
+# ===== 模型 / 词表产物 =====
+*.ckpt
+*.tkm
+model_big*
+model_big2*
+
+# ===== 日志 / 压测输出 =====
+*.log
+*.err
+benchmark/log_*.txt
+benchmark/timeline_*.txt
+benchmark/bench_out.txt
+benchmark/bench_pid.txt
+benchmark/err_*.txt
+benchmark/eval_*/cli-fast/
+benchmark/eval_*/logs/
+
+# ===== 构建产物 / 二进制 =====
+build/
+build*/
+CMakeCache.txt
+CMakeFiles/
+*.exe
+*.dll
+*.so
+*.lib
+*.pyd
+
+# ===== IDE / 系统 =====
+.idea/
+.vs/
+.vscode/
+*.user
+Thumbs.db
+desktop.ini
+
+# ===== 本地备份 =====
+backup_round8/
