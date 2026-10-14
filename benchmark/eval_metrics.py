@@ -24,6 +24,12 @@ Markdown 汇总。全部指标通过 CLI（tok-cli.exe）真实测量，CLI 非�
     - TokEval 数字对齐 (§3.5): digit_boundary_f1 / digit_split_variability /
                 operator_isolation，数字串与操作符抽样后并发调用 CLI 计算
                 （TOKEVAL_WORKERS 并发，避免大批量顺序调用超时）
+    - 协议鲁棒性（可选，需显式传 --protocol-slices-dir 启用；不传时行为与既有版本完全一致）:
+                双口径比值 D_lang = BPT_eval / BPT_real（en/zh/code 各一）、模型内离散度
+                dispersion = max(D) - min(D) 及三语种标准差、评测集质量审计 protocol_audit
+                （逐文件 重复行率/总字符数/不同字符数/不同汉字数/行数）、聚合口径并列输出
+                （保留按字节加权 bpt_total，新增三语种等权 macro 平均）、按 dispersion
+                阈值判定（≤0.35 稳定 / 0.35–1.0 敏感 / >1.0 口径依赖）
 
 说明:
     - 还原率/稳定性按"行"处理。为避免文件尾部换行被归一化为空格 token 而误判，
@@ -59,6 +65,11 @@ DEFAULT_OPERATOR_SPANS = 30    # 操作符出现抽样上限（每语种）
 DIGIT_MIN_LEN = 4              # 数字串最小长度（≥4 才存在内部理想边界）
 TOKEVAL_WORKERS = 6            # 数字/操作符抽样的并发 CLI 调用数（避免顺序调用超时）
 
+# 协议鲁棒性指标（双口径比值 D / 模型内离散度 dispersion / 评测集质量审计 protocol_audit）
+PROTOCOL_LANGS = ("en", "zh", "code")   # 参与 D 与 dispersion 计算的语种
+PROTOCOL_STABLE_MAX = 0.35              # dispersion ≤ 0.35 → 稳定
+PROTOCOL_SENSITIVE_MAX = 1.0            # 0.35 < dispersion ≤ 1.0 → 敏感；> 1.0 → 口径依赖
+
 
 # ---------------------------------------------------------------------------
 # CLI 封装
@@ -77,9 +88,20 @@ def run_cli(cmd, label=""):
     return proc.stdout, elapsed
 
 
+# P0-1 / P1-4 / P1-6 runtime overrides appended to every encode/bench call.
+# Empty by default => without --cli-extra the harness behaves exactly as before.
+CLI_EXTRA = []
+
+
+def cli_extra_args():
+    """Extra flags appended to encode/bench CLI calls (see --cli-extra)."""
+    return list(CLI_EXTRA)
+
+
 def encode_file(cli, model, path, tmpdir):
     """encode 一个文件，返回 id 列表。"""
-    out, _ = run_cli([cli, "encode", "--model", model, "--file", path], "encode")
+    out, _ = run_cli([cli, "encode", "--model", model, "--file", path]
+                     + cli_extra_args(), "encode")
     text = out.decode("utf-8", "replace").strip()
     if not text:
         return []
@@ -297,7 +319,8 @@ def throughput(cli, model, max_file, tmpdir, max_ids_len=20000):
     """最大语种文件整体 encode 计时；decode 同测；短输入 encode 计时近似 load_ms。"""
     # encode 整体计时
     t0 = time.perf_counter()
-    out, _ = run_cli([cli, "encode", "--model", model, "--file", max_file], "encode-throughput")
+    out, _ = run_cli([cli, "encode", "--model", model, "--file", max_file]
+                     + cli_extra_args(), "encode-throughput")
     enc_elapsed = time.perf_counter() - t0
     text = out.decode("utf-8", "replace").strip()
     ids = [int(x) for x in text.split()] if text else []
@@ -320,7 +343,8 @@ def throughput(cli, model, max_file, tmpdir, max_ids_len=20000):
     with open(load_path, "wb") as fh:
         fh.write(b"x")
     t0 = time.perf_counter()
-    run_cli([cli, "encode", "--model", model, "--file", load_path], "load")
+    run_cli([cli, "encode", "--model", model, "--file", load_path]
+            + cli_extra_args(), "load")
     load_ms = (time.perf_counter() - t0) * 1000.0
 
     return encode_tps, decode_tps, load_ms
@@ -693,6 +717,261 @@ def tokeval_operator_metrics(cli, model, lines, tmpdir, pieces):
 
 
 # ---------------------------------------------------------------------------
+# 协议鲁棒性：双口径比值 D / 模型内离散度 dispersion / 评测集质量审计 protocol_audit
+# ---------------------------------------------------------------------------
+# 口径定义（与评测常规指标同源，BPT = bytes / tokens，tokens 由 CLI 实测）：
+#   D_lang     = BPT_eval / BPT_real，逐语种（en/zh/code）各一个
+#   dispersion = max(D) - min(D)，并附三语种标准差与等权均值
+#   判定        = dispersion ≤ 0.35 稳定 / 0.35 < dispersion ≤ 1.0 敏感 / > 1.0 口径依赖
+#   聚合口径    = 保留按字节加权的 bpt_total，并列输出三语种等权 macro 平均
+
+def protocol_audit_file(path):
+    """单个语料文件的质量审计：行数 / 总字符数 / 不同字符数 / 不同汉字数 / 重复行率。"""
+    data, lines = read_file_data(path)
+    text = data.decode("utf-8", "replace")
+    counts = {}
+    for ln in lines:
+        counts[ln] = counts.get(ln, 0) + 1
+    dup_extra = sum(c - 1 for c in counts.values() if c > 1)
+    distinct_cjk = {ch for ch in text if "\u4e00" <= ch <= "\u9fff"}
+    return {
+        "file": os.path.basename(path),
+        "path": os.path.abspath(path),
+        "bytes": len(data),
+        "lines": len(lines),
+        "chars": len(text),
+        "distinct_chars": len(set(text)),
+        "distinct_cjk_chars": len(distinct_cjk),
+        "dup_line_count": dup_extra,
+        "dup_line_rate": round(dup_extra / float(len(lines)), 6) if lines else None,
+    }
+
+
+def protocol_audit_files(tagged_paths):
+    """批量质量审计。tagged_paths: {tag: 文件路径}；文件缺失时以 error 标记占位。"""
+    out = {}
+    for tag, path in tagged_paths.items():
+        if path and os.path.isfile(path):
+            out[tag] = protocol_audit_file(path)
+        else:
+            out[tag] = {"file": os.path.basename(path) if path else None,
+                        "path": os.path.abspath(path) if path else None,
+                        "error": "文件不存在"}
+    return out
+
+
+def protocol_bpt(cli, model, path, tmpdir):
+    """单文件 BPT = bytes / tokens（tokens 由 CLI 实测）。"""
+    ids = encode_file(cli, model, path, tmpdir)
+    nbytes = os.path.getsize(path)
+    if not ids:
+        return {"bytes": nbytes, "tokens": 0, "bpt": None}
+    return {"bytes": nbytes, "tokens": len(ids),
+            "bpt": round(nbytes / float(len(ids)), 6)}
+
+
+def protocol_dispersion(d_values):
+    """D 序列的模型内离散度：max-min、等权均值、总体标准差。"""
+    vals = [v for v in d_values if v is not None]
+    if not vals:
+        return {"max_minus_min": None, "mean": None, "std": None, "n": 0}
+    mean = sum(vals) / float(len(vals))
+    var = sum((v - mean) ** 2 for v in vals) / float(len(vals))
+    return {"max_minus_min": round(max(vals) - min(vals), 6),
+            "mean": round(mean, 6), "std": round(math.sqrt(var), 6), "n": len(vals)}
+
+
+def protocol_verdict(disp):
+    """按 dispersion 阈值给出判定语。"""
+    if disp is None:
+        return {"level": None, "text": "无法判定：缺少可用 D 值"}
+    if disp <= PROTOCOL_STABLE_MAX:
+        return {"level": "稳定",
+                "text": "口径稳定：评测语料与真实语料结论一致（dispersion=%.4f ≤ %.2f）"
+                        % (disp, PROTOCOL_STABLE_MAX)}
+    if disp <= PROTOCOL_SENSITIVE_MAX:
+        return {"level": "敏感",
+                "text": "口径敏感：评测语料会放大或缩小真实表现，跨口径数值不可直接混用"
+                        "（%.2f < dispersion=%.4f ≤ %.2f）"
+                        % (PROTOCOL_STABLE_MAX, disp, PROTOCOL_SENSITIVE_MAX)}
+    return {"level": "口径依赖",
+            "text": "口径依赖：结果由语料口径主导，评测语料结论不能外推到真实语料"
+                    "（dispersion=%.4f > %.2f）" % (disp, PROTOCOL_SENSITIVE_MAX)}
+
+
+def protocol_macro(values):
+    """三语种等权 macro 平均（忽略 None）。"""
+    vals = [v for v in values if v is not None]
+    if not vals:
+        return None
+    return round(sum(vals) / float(len(vals)), 6)
+
+
+def compute_protocol_robustness(cli, model, slices_dir, tmpdir,
+                                full_corpus_dir=None, langs=PROTOCOL_LANGS):
+    """计算单个模型的协议鲁棒性指标。
+
+    slices_dir:      同口径切片目录，需含 eval_<lang>.txt 与 <lang>_real.txt。
+    full_corpus_dir: 可选，评测语料根目录（corpus/<lang>/<lang>.txt），用于输出
+                     按字节加权的 bpt_total 与三语种等权 macro 平均（聚合口径并列）。
+    """
+    per_lang = {}
+    for lang in langs:
+        efp = os.path.join(slices_dir, "eval_%s.txt" % lang)
+        rfp = os.path.join(slices_dir, "%s_real.txt" % lang)
+        entry = {"eval_path": os.path.abspath(efp), "real_path": os.path.abspath(rfp)}
+        if not os.path.isfile(efp) or not os.path.isfile(rfp):
+            entry["error"] = "切片文件缺失"
+            entry["D"] = None
+            per_lang[lang] = entry
+            continue
+        ev = protocol_bpt(cli, model, efp, tmpdir)
+        re_ = protocol_bpt(cli, model, rfp, tmpdir)
+        d = (ev["bpt"] / re_["bpt"]) if (ev["bpt"] and re_["bpt"]) else None
+        entry.update({"eval": ev, "real": re_,
+                      "D": round(d, 6) if d is not None else None})
+        per_lang[lang] = entry
+
+    d_map = {lang: per_lang[lang].get("D") for lang in langs}
+    disp = protocol_dispersion([d_map[l] for l in langs])
+    verdict = protocol_verdict(disp["max_minus_min"])
+
+    aggregate = {"bpt_macro": None, "per_lang_bpt": {}, "source": None}
+    if full_corpus_dir and os.path.isdir(full_corpus_dir):
+        tot_b = tot_t = 0
+        per_lang_bpt = {}
+        for lang in langs:
+            fp = os.path.join(full_corpus_dir, lang, "%s.txt" % lang)
+            if not os.path.isfile(fp):
+                per_lang_bpt[lang] = None
+                continue
+            r = protocol_bpt(cli, model, fp, tmpdir)
+            tot_b += r["bytes"]
+            tot_t += r["tokens"]
+            per_lang_bpt[lang] = r["bpt"]
+        aggregate["bpt_total_byte_weighted"] = round(tot_b / float(tot_t), 6) if tot_t else None
+        aggregate["bpt_macro"] = protocol_macro([per_lang_bpt[l] for l in langs])
+        aggregate["per_lang_bpt"] = per_lang_bpt
+        aggregate["source"] = "corpus/<lang>/<lang>.txt 整语料实测（bytes/tokens）"
+    else:
+        per_lang_bpt = {l: per_lang[l].get("eval", {}).get("bpt") for l in langs}
+        aggregate["bpt_total_byte_weighted"] = None
+        aggregate["bpt_macro"] = protocol_macro([per_lang_bpt[l] for l in langs])
+        aggregate["per_lang_bpt"] = per_lang_bpt
+        aggregate["source"] = "eval_<lang>.txt 切片实测（未提供整语料目录）"
+
+    return {
+        "model": os.path.abspath(model),
+        "langs": list(langs),
+        "per_lang": per_lang,
+        "D": d_map,
+        "dispersion": disp,
+        "verdict": verdict,
+        "aggregate": aggregate,
+        "thresholds": {"stable_max": PROTOCOL_STABLE_MAX,
+                       "sensitive_max": PROTOCOL_SENSITIVE_MAX},
+    }
+
+
+def _pfmt(v, nd=4):
+    if isinstance(v, (int, float)) and not isinstance(v, bool):
+        return "%.*f" % (nd, v)
+    return "-"
+
+
+def render_protocol_markdown(payload, title="协议鲁棒性指标报告"):
+    """把多模型协议鲁棒性结果渲染为 Markdown。
+
+    payload = {
+      "date": str, "notes": [str],
+      "corpus": {"protocol_audit": {tag: {...}}, "slices_dir": str, "full_corpus_dir": str},
+      "models": {name: {..compute_protocol_robustness 返回值.., "source": str}},
+    }
+    """
+    lines = []
+    lines.append("# %s" % title)
+    lines.append("")
+    lines.append("- date: %s" % payload.get("date", ""))
+    corp = payload.get("corpus", {}) or {}
+    if corp.get("slices_dir"):
+        lines.append("- 同口径切片目录: `%s`" % corp["slices_dir"])
+    if corp.get("full_corpus_dir"):
+        lines.append("- 整语料目录（聚合口径）: `%s`" % corp["full_corpus_dir"])
+    lines.append("- 指标定义: D_lang = BPT_eval / BPT_real；dispersion = max(D) - min(D)")
+    lines.append("- 判定阈值: dispersion ≤ 0.35 稳定 / 0.35–1.0 敏感 / > 1.0 口径依赖")
+    lines.append("")
+
+    models = payload.get("models", {}) or {}
+
+    lines.append("## 1. 双口径比值与模型内离散度")
+    lines.append("")
+    lines.append("| model | D_en | D_zh | D_code | dispersion(max-min) | std(三语种) | verdict |")
+    lines.append("|---|---|---|---|---|---|---|")
+    for name, sec in models.items():
+        d = sec.get("D", {}) or {}
+        disp = sec.get("dispersion", {}) or {}
+        vd = (sec.get("verdict", {}) or {}).get("level") or "-"
+        lines.append("| %s | %s | %s | %s | **%s** | %s | %s |" % (
+            name, _pfmt(d.get("en")), _pfmt(d.get("zh")), _pfmt(d.get("code")),
+            _pfmt(disp.get("max_minus_min")), _pfmt(disp.get("std")), vd))
+    lines.append("")
+
+    lines.append("## 2. 聚合口径并列输出")
+    lines.append("")
+    lines.append("| model | bpt_total（按字节加权） | BPT_macro（三语种等权） | BPT_en | BPT_zh | BPT_code | 口径来源 |")
+    lines.append("|---|---|---|---|---|---|---|")
+    for name, sec in models.items():
+        agg = sec.get("aggregate", {}) or {}
+        pl = agg.get("per_lang_bpt", {}) or {}
+        lines.append("| %s | %s | %s | %s | %s | %s | %s |" % (
+            name, _pfmt(agg.get("bpt_total_byte_weighted")), _pfmt(agg.get("bpt_macro")),
+            _pfmt(pl.get("en")), _pfmt(pl.get("zh")), _pfmt(pl.get("code")),
+            agg.get("source") or "-"))
+    lines.append("")
+
+    audit = corp.get("protocol_audit") or {}
+    if audit:
+        lines.append("## 3. 评测集质量审计 protocol_audit（逐语料文件）")
+        lines.append("")
+        lines.append("| tag | file | 行数 | 总字符数 | 不同字符数 | 不同汉字数 | 重复行率 | 重复行数 |")
+        lines.append("|---|---|---|---|---|---|---|---|")
+        for tag, a in audit.items():
+            if a.get("error"):
+                lines.append("| %s | %s | - | - | - | - | - | - |" % (tag, a.get("file")))
+                continue
+            lines.append("| %s | %s | %d | %d | %d | %d | %s | %d |" % (
+                tag, a.get("file"), a.get("lines", 0), a.get("chars", 0),
+                a.get("distinct_chars", 0), a.get("distinct_cjk_chars", 0),
+                _pfmt(a.get("dup_line_rate"), 6), a.get("dup_line_count", 0)))
+        lines.append("")
+
+    lines.append("## 4. 判定语")
+    lines.append("")
+    for name, sec in models.items():
+        vd = sec.get("verdict", {}) or {}
+        src = sec.get("source") or "-"
+        lines.append("- **%s**（%s）：%s" % (name, src, vd.get("text") or "-"))
+    lines.append("")
+
+    findings = payload.get("data_quality_findings") or []
+    if findings:
+        lines.append("## 5. 数据质量观察（由 protocol_audit 派生）")
+        lines.append("")
+        for x in findings:
+            lines.append("- %s" % x)
+        lines.append("")
+
+    notes = payload.get("notes") or []
+    if notes:
+        lines.append("## %d. 说明" % (6 if findings else 5))
+        lines.append("")
+        for n in notes:
+            lines.append("- %s" % n)
+        lines.append("")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
 # 主流程
 # ---------------------------------------------------------------------------
 
@@ -708,7 +987,28 @@ def main():
                         help="tok-cli.exe 绝对路径")
     parser.add_argument("--output", default="",
                         help="JSON 报告输出路径（默认 eval_report_<date>.json，与脚本同目录）")
+    # 运行时推理开关（新增，可选；不传时行为与既有版本完全一致）
+    parser.add_argument("--cli-extra", default="",
+                        help="[P0-1/P1-4/P1-6] 追加到每次 encode/bench CLI 调用的额外参数，"
+                             "空格分隔，例如 '--norm-reversible --segment-rules'；"
+                             "用于在不重训的前提下用修复后的编码器重评既有模型")
+    # 协议鲁棒性（新增，全部可选；不传 --protocol-slices-dir 时行为与既有版本完全一致）
+    parser.add_argument("--protocol-slices-dir", default="",
+                        help="[协议鲁棒性] 同口径切片目录，需含 eval_<lang>.txt 与 <lang>_real.txt；"
+                             "提供后额外计算 D/dispersion/protocol_audit 并输出独立段落")
+    parser.add_argument("--protocol-full-corpus-dir", default="",
+                        help="[协议鲁棒性] 整语料目录（corpus/<lang>/<lang>.txt），用于按字节加权 "
+                             "bpt_total 与三语种等权 macro 平均的并列输出；缺省则回退为切片口径")
+    parser.add_argument("--protocol-label", default="",
+                        help="[协议鲁棒性] 该模型在报告中的显示名（默认取模型文件名）")
+    parser.add_argument("--protocol-out", default="",
+                        help="[协议鲁棒性] 协议鲁棒性 JSON 输出路径（可选）")
+    parser.add_argument("--protocol-md", default="",
+                        help="[协议鲁棒性] 协议鲁棒性 Markdown 输出路径（可选）")
     args = parser.parse_args()
+
+    global CLI_EXTRA
+    CLI_EXTRA = args.cli_extra.split() if args.cli_extra else []
 
     cli = os.path.abspath(args.cli)
     model = os.path.abspath(args.model)
@@ -817,10 +1117,34 @@ def main():
         if max_file is not None:
             enc_tps, dec_tps, load_ms = throughput(cli, model, max_file, tmpdir)
 
+    # ---- 协议鲁棒性（可选；独立计算、独立输出段落，不改动上述任何既有指标）----
+    protocol_sec = None
+    if args.protocol_slices_dir:
+        slices_dir = os.path.abspath(args.protocol_slices_dir)
+        if not os.path.isdir(slices_dir):
+            sys.stderr.write("[WARN] 协议鲁棒性切片目录不存在，已跳过: %s\n" % slices_dir)
+        else:
+            full_dir = os.path.abspath(args.protocol_full_corpus_dir) \
+                if args.protocol_full_corpus_dir else None
+            if full_dir and not os.path.isdir(full_dir):
+                sys.stderr.write("[WARN] 整语料目录不存在，聚合口径回退为切片: %s\n" % full_dir)
+                full_dir = None
+            with tempfile.TemporaryDirectory(prefix="tok_proto_") as ptmp:
+                protocol_sec = compute_protocol_robustness(
+                    cli, model, slices_dir, ptmp, full_corpus_dir=full_dir)
+                protocol_sec["label"] = args.protocol_label or os.path.basename(model)
+                protocol_sec["corpus_audit"] = protocol_audit_files(dict(
+                    [("eval_%s" % l, os.path.join(slices_dir, "eval_%s.txt" % l))
+                     for l in PROTOCOL_LANGS]
+                    + [("%s_real" % l, os.path.join(slices_dir, "%s_real.txt" % l))
+                       for l in PROTOCOL_LANGS]))
+                protocol_sec["corpus"] = {"slices_dir": slices_dir, "full_corpus_dir": full_dir}
+
     report = {
         "date": date_str,
         "model": model,
         "vocab_size": vocab_size,
+        "cli_extra": list(CLI_EXTRA),
         "langs": lang_results,
         "totals": {
             "bytes": totals_bytes,
@@ -862,6 +1186,9 @@ def main():
             "load_ms": round(load_ms, 3) if load_ms is not None else None,
         },
     }
+
+    if protocol_sec is not None:
+        report["protocol_robustness"] = protocol_sec
 
     with open(out_path, "w", encoding="utf-8") as fh:
         json.dump(report, fh, ensure_ascii=False, indent=2)
@@ -919,6 +1246,65 @@ def main():
         ("%.4f" % tk["digit_split_variability"]) if tk["digit_split_variability"] is not None else "-",
         ("%.4f" % tk["operator_isolation"]) if tk["operator_isolation"] is not None else "-",
     ))
+    if protocol_sec is not None:
+        pf = protocol_sec
+        pd = pf["D"]
+        pdisp = pf["dispersion"]
+        print("")
+        print("## 协议鲁棒性（双口径比值 D / 模型内离散度 / 评测集质量审计）")
+        print("| model | D_en | D_zh | D_code | dispersion(max-min) | std | verdict |")
+        print("|---|---|---|---|---|---|---|")
+        print("| %s | %s | %s | %s | %s | %s | %s |" % (
+            pf["label"], _pfmt(pd.get("en")), _pfmt(pd.get("zh")), _pfmt(pd.get("code")),
+            _pfmt(pdisp.get("max_minus_min")), _pfmt(pdisp.get("std")),
+            (pf["verdict"] or {}).get("level") or "-"))
+        agg = pf["aggregate"]
+        print("- bpt_total(按字节加权): %s | BPT_macro(三语种等权): %s | 口径: %s" % (
+            _pfmt(agg.get("bpt_total_byte_weighted")), _pfmt(agg.get("bpt_macro")),
+            agg.get("source") or "-"))
+        print("- verdict: %s" % ((pf["verdict"] or {}).get("text") or "-"))
+        print("- protocol_audit:")
+        print("| tag | file | lines | chars | distinct_chars | distinct_cjk | dup_line_rate |")
+        print("|---|---|---|---|---|---|---|")
+        for tag, a in (pf.get("corpus_audit") or {}).items():
+            if a.get("error"):
+                print("| %s | %s | - | - | - | - | - |" % (tag, a.get("file")))
+                continue
+            print("| %s | %s | %d | %d | %d | %d | %s |" % (
+                tag, a.get("file"), a.get("lines", 0), a.get("chars", 0),
+                a.get("distinct_chars", 0), a.get("distinct_cjk_chars", 0),
+                _pfmt(a.get("dup_line_rate"), 6)))
+        payload = {
+            "date": date_str,
+            "title": "协议鲁棒性指标报告 — %s" % pf["label"],
+            "notes": [
+                "D_lang = BPT_eval / BPT_real（BPT = bytes/tokens，tokens 由 CLI 实测）。",
+                "dispersion = max(D) - min(D)，并附三语种总体标准差；"
+                "阈值 ≤0.35 稳定 / 0.35–1.0 敏感 / >1.0 口径依赖。",
+                "真实语料为 scripts/indomain_compare.py、indomain_compare2.py 所用同一语料来源，"
+                "本次未引入新语料。",
+            ],
+            "corpus": {"slices_dir": (pf.get("corpus") or {}).get("slices_dir"),
+                       "full_corpus_dir": (pf.get("corpus") or {}).get("full_corpus_dir"),
+                       "protocol_audit": pf.get("corpus_audit") or {}},
+            "models": {pf["label"]: dict(pf, source="本机 CLI 实测（加速版 CLI，输出与 build/tok-cli.exe 逐字节一致）")},
+        }
+        if args.protocol_out:
+            po = os.path.abspath(args.protocol_out)
+            d = os.path.dirname(po)
+            if d and not os.path.isdir(d):
+                os.makedirs(d)
+            with open(po, "w", encoding="utf-8") as fh:
+                json.dump(payload, fh, ensure_ascii=False, indent=2)
+            print("Protocol JSON: %s" % po)
+        if args.protocol_md:
+            pm = os.path.abspath(args.protocol_md)
+            d = os.path.dirname(pm)
+            if d and not os.path.isdir(d):
+                os.makedirs(d)
+            with open(pm, "w", encoding="utf-8") as fh:
+                fh.write(render_protocol_markdown(payload, title=payload["title"]))
+            print("Protocol Markdown: %s" % pm)
     print("")
     print("Report JSON: %s" % out_path)
 

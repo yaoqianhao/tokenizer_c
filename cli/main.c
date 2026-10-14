@@ -73,8 +73,17 @@ static void usage(void) {
         "             --no-byte-fallback --fold-case --json <out.json>\n"
         "             --ckpt <file> --sp-model <out.model> -v\n"
         "  %s encode --model <file> (--text <text> | --file <in.txt>)\n"
-        "  %s decode --model <file> --ids <id,id,...>\n",
-        g_prog, g_prog, g_prog);
+        "             [--norm-reversible] [--segment-rules] [--byte-real]\n"
+        "  %s decode --model <file> --ids <id,id,...>\n"
+        "  %s bench  --model <file> (--file <f> | --list <paths.txt>)"
+        " [--repeat N] [--decode-cap N]\n"
+        "             [--norm-reversible] [--segment-rules] [--byte-real]\n"
+        "    inference overrides (applied after load, for re-evaluating an\n"
+        "    already-trained model without a retrain):\n"
+        "      --norm-reversible  lossless NFC-only normalization (P0-1)\n"
+        "      --segment-rules    digit 3-grouping + operator isolation (P1-6)\n"
+        "      --byte-real        emit real <0xXX> piece ids (P1-4)\n",
+        g_prog, g_prog, g_prog, g_prog);
 }
 
 static const char *arg_value(int argc, char **argv, int i, const char *opt,
@@ -196,8 +205,20 @@ static tokenizer_t *load_model(const char *model) {
     return tokenizer_load(model);
 }
 
+/* P0-1 / P1-4 / P1-6 runtime overrides (see tokenizer.h). Applied after load so
+ * an already-trained model can be re-evaluated with the fixed encoder without
+ * a retrain. Flags only ever turn an override ON (0 = keep the model header). */
+static void apply_infer_flags(tokenizer_t *tok, int norm_rev, int seg_rules,
+                              int byte_real) {
+    if (!tok) return;
+    if (norm_rev) tokenizer_set_norm_reversible(tok, 1);
+    if (seg_rules) tokenizer_set_segment_rules(tok, 1);
+    if (byte_real) tokenizer_set_byte_real(tok, 1);
+}
+
 static int run_encode(int argc, char **argv) {
     const char *model = NULL, *text = NULL, *file = NULL;
+    int norm_rev = 0, seg_rules = 0, byte_real = 0;
     for (int i = 0; i < argc; i++) {
         int next = i + 1;
         const char *v = NULL;
@@ -217,6 +238,12 @@ static int run_encode(int argc, char **argv) {
             v = arg_value(argc, argv, i, "--file", &next);
             if (!v) return 1;
             file = v;
+        } else if (strcmp(argv[i], "--norm-reversible") == 0) {
+            norm_rev = 1;
+        } else if (strcmp(argv[i], "--segment-rules") == 0) {
+            seg_rules = 1;
+        } else if (strcmp(argv[i], "--byte-real") == 0) {
+            byte_real = 1;
         } else {
             fprintf(stderr, "unknown encode option: %s\n", argv[i]);
             return 1;
@@ -233,6 +260,7 @@ static int run_encode(int argc, char **argv) {
                 tokenizer_last_error() ? tokenizer_last_error() : "unknown");
         return 1;
     }
+    apply_infer_flags(tok, norm_rev, seg_rules, byte_real);
     char *content = NULL;
     size_t content_len = 0;
     if (text) {
@@ -348,6 +376,216 @@ static int run_decode(int argc, char **argv) {
     return 0;
 }
 
+/* ------------------------------------------------------------------ */
+/* bench: in-process throughput measurement (P0-2)                     */
+/*                                                                     */
+/* One process: load once, encode every input file, then decode the    */
+/* resulting id sequences --repeat times. The kernel timings therefore */
+/* exclude per-call process start and repeated model loading, which    */
+/* the legacy "one CLI call per metric" harness folded into load_ms.   */
+/* Emits one single-line JSON object on stdout; progress goes to       */
+/* stderr, so a caller can json-parse stdout directly.                 */
+/* ------------------------------------------------------------------ */
+
+static double bench_now_ms(void) {
+#if defined(_WIN32)
+    static LARGE_INTEGER freq;
+    static int init = 0;
+    LARGE_INTEGER c;
+    if (!init) { QueryPerformanceFrequency(&freq); init = 1; }
+    QueryPerformanceCounter(&c);
+    return (double)c.QuadPart * 1000.0 / (double)freq.QuadPart;
+#else
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (double)ts.tv_sec * 1000.0 + (double)ts.tv_nsec / 1e6;
+#endif
+}
+
+static void json_puts(const char *s) {
+    putchar('"');
+    for (const unsigned char *p = (const unsigned char *)s; p && *p; p++) {
+        if (*p == '\\' || *p == '"') { putchar('\\'); putchar((char)*p); }
+        else if (*p < 0x20) printf("\\u%04x", (unsigned)*p);
+        else putchar((char)*p);
+    }
+    putchar('"');
+}
+
+static int bench_read_file(const char *path, char **out, size_t *out_len) {
+    FILE *fp = fopen(path, "rb");
+    if (!fp) return -1;
+    long long sz = 0;
+    if (cli_file_size64(fp, &sz) != 0 || sz < 0) { fclose(fp); return -1; }
+    char *buf = (char *)malloc((size_t)sz + 1);
+    if (!buf) { fclose(fp); return -1; }
+    size_t rd = fread(buf, 1, (size_t)sz, fp);
+    fclose(fp);
+    buf[rd] = '\0';
+    *out = buf;
+    *out_len = rd;
+    return 0;
+}
+
+static int run_bench(int argc, char **argv) {
+    const char *model = NULL, *list_path = NULL;
+    const char *paths[32];
+    static char list_buf[32][1024];
+    int npaths = 0, repeat = 1, decode_cap = 0;
+    int norm_rev = 0, seg_rules = 0, byte_real = 0;
+    for (int i = 0; i < argc; i++) {
+        int next = i + 1;
+        const char *v = NULL;
+        if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
+            usage();
+            return 0;
+        } else if (strcmp(argv[i], "--model") == 0) {
+            v = arg_value(argc, argv, i, "--model", &next);
+            if (!v) return 1;
+            model = v;
+        } else if (strcmp(argv[i], "--list") == 0) {
+            v = arg_value(argc, argv, i, "--list", &next);
+            if (!v) return 1;
+            list_path = v;
+        } else if (strcmp(argv[i], "--file") == 0) {
+            v = arg_value(argc, argv, i, "--file", &next);
+            if (!v) return 1;
+            if (npaths < 32) paths[npaths++] = v;
+        } else if (strcmp(argv[i], "--repeat") == 0) {
+            v = arg_value(argc, argv, i, "--repeat", &next);
+            if (!v) return 1;
+            repeat = atoi(v);
+        } else if (strcmp(argv[i], "--decode-cap") == 0) {
+            v = arg_value(argc, argv, i, "--decode-cap", &next);
+            if (!v) return 1;
+            decode_cap = atoi(v);
+        } else if (strcmp(argv[i], "--norm-reversible") == 0) {
+            norm_rev = 1;
+        } else if (strcmp(argv[i], "--segment-rules") == 0) {
+            seg_rules = 1;
+        } else if (strcmp(argv[i], "--byte-real") == 0) {
+            byte_real = 1;
+        } else {
+            fprintf(stderr, "unknown bench option: %s\n", argv[i]);
+            return 1;
+        }
+        i = next - 1;
+    }
+    if (list_path) {
+        FILE *fp = fopen(list_path, "rb");
+        if (!fp) {
+            fprintf(stderr, "bench: cannot open list %s\n", list_path);
+            return 1;
+        }
+        char line[1024];
+        while (npaths < 32 && fgets(line, sizeof(line), fp)) {
+            size_t l = strlen(line);
+            while (l && (line[l - 1] == '\n' || line[l - 1] == '\r' ||
+                         line[l - 1] == ' ')) line[--l] = '\0';
+            if (!l) continue;
+            memcpy(list_buf[npaths], line, l + 1);
+            paths[npaths] = list_buf[npaths];
+            npaths++;
+        }
+        fclose(fp);
+    }
+    if (!model || npaths == 0) {
+        fprintf(stderr, "bench requires --model and (--file | --list)\n");
+        return 1;
+    }
+    if (repeat < 1) repeat = 1;
+
+    double t0 = bench_now_ms();
+    tokenizer_t *tok = load_model(model);
+    double load_ms = bench_now_ms() - t0;
+    if (!tok) {
+        fprintf(stderr, "load failed: %s\n",
+                tokenizer_last_error() ? tokenizer_last_error() : "unknown");
+        return 1;
+    }
+    apply_infer_flags(tok, norm_rev, seg_rules, byte_real);
+
+    double enc_ms_total = 0.0, dec_ms_total = 0.0, dec_tokens_total = 0.0;
+    unsigned long long bytes_total = 0, tokens_total = 0, decoded_bytes_sum = 0;
+
+    printf("{");
+    printf("\"model\": ");
+    json_puts(model);
+    printf(", \"mode\": \"in-process\", \"vocab_size\": %d, \"load_ms\": %.3f,"
+           " \"repeat\": %d, \"norm_reversible\": %d, \"segment_rules\": %d,"
+           " \"byte_real\": %d, \"files\": [",
+           (int)tokenizer_vocab_size(tok), load_ms, repeat,
+           norm_rev ? 1 : 0, seg_rules ? 1 : 0, byte_real ? 1 : 0);
+
+    for (int fi = 0; fi < npaths; fi++) {
+        char *content = NULL;
+        size_t clen = 0;
+        if (bench_read_file(paths[fi], &content, &clen) != 0) {
+            fprintf(stderr, "bench: cannot read %s (skipped)\n", paths[fi]);
+            continue;
+        }
+        int *ids = NULL;
+        size_t n = 0;
+        double e0 = bench_now_ms();
+        int rc = tokenizer_encode(tok, content, clen, &ids, &n);
+        double e1 = bench_now_ms();
+        if (rc != 0) {
+            fprintf(stderr, "bench: encode failed on %s (skipped)\n", paths[fi]);
+            free(content);
+            continue;
+        }
+        size_t dn = (decode_cap > 0 && n > (size_t)decode_cap)
+                        ? (size_t)decode_cap : n;
+        double d0 = bench_now_ms();
+        for (int r = 0; r < repeat && dn > 0; r++) {
+            char *out = NULL;
+            size_t olen = 0;
+            if (tokenizer_decode(tok, ids, dn, &out, &olen) != 0) {
+                fprintf(stderr, "bench: decode failed on %s\n", paths[fi]);
+                break;
+            }
+            decoded_bytes_sum += (unsigned long long)olen;
+            tokenizer_free_text(out);
+        }
+        double d1 = bench_now_ms();
+        double enc_ms = e1 - e0, dec_ms = d1 - d0;
+        enc_ms_total += enc_ms;
+        dec_ms_total += dec_ms;
+        dec_tokens_total += (double)dn * (double)repeat;
+        bytes_total += (unsigned long long)clen;
+        tokens_total += (unsigned long long)n;
+
+        if (fi) printf(", ");
+        printf("{\"path\": ");
+        json_puts(paths[fi]);
+        printf(", \"bytes\": %llu, \"tokens\": %llu, \"encode_ms\": %.3f,"
+               " \"encode_tps\": %.3f, \"decoded_tokens\": %llu,"
+               " \"decode_ms\": %.3f, \"decode_tps\": %.3f}",
+               (unsigned long long)clen, (unsigned long long)n, enc_ms,
+               enc_ms > 0 ? (double)clen / (enc_ms / 1000.0) : 0.0,
+               (unsigned long long)(dn * (size_t)repeat), dec_ms,
+               dec_ms > 0 ? ((double)dn * (double)repeat) / (dec_ms / 1000.0)
+                          : 0.0);
+        fprintf(stderr, "bench: %s bytes=%llu tokens=%llu encode_ms=%.3f "
+                        "decode_ms=%.3f\n",
+                paths[fi], (unsigned long long)clen,
+                (unsigned long long)n, enc_ms, dec_ms);
+        tokenizer_free_ids(ids);
+        free(content);
+    }
+
+    printf("], \"bytes_total\": %llu, \"tokens_total\": %llu,"
+           " \"encode_ms_total\": %.3f, \"decode_ms_total\": %.3f,"
+           " \"encode_tps\": %.3f, \"decode_tps\": %.3f,"
+           " \"decoded_bytes_sum\": %llu}\n",
+           bytes_total, tokens_total, enc_ms_total, dec_ms_total,
+           enc_ms_total > 0 ? (double)bytes_total / (enc_ms_total / 1000.0) : 0.0,
+           dec_ms_total > 0 ? dec_tokens_total / (dec_ms_total / 1000.0) : 0.0,
+           decoded_bytes_sum);
+    tokenizer_free(tok);
+    return 0;
+}
+
 int main(int argc, char **argv) {
 #ifdef _WIN32
     char **utf8_argv = win32_argv_to_utf8(&argc);
@@ -362,6 +600,7 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "train") == 0) rc = run_train(argc - 2, argv + 2);
     else if (strcmp(argv[1], "encode") == 0) rc = run_encode(argc - 2, argv + 2);
     else if (strcmp(argv[1], "decode") == 0) rc = run_decode(argc - 2, argv + 2);
+    else if (strcmp(argv[1], "bench") == 0) rc = run_bench(argc - 2, argv + 2);
     else if (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0) {
         usage();
         rc = 0;

@@ -60,6 +60,8 @@ tokenizer_t *tokenizer_create(int unk_id, int bos_id, int eos_id, int pad_id,
     tok->eos_id = eos_id;
     tok->pad_id = pad_id;
     tok->byte_fallback = byte_fallback;
+    /* P1-4: byte -> real piece id table starts empty (-1 = none). */
+    for (int b = 0; b < 256; b++) tok->byte_ids[b] = -1;
     tok->trie = trie_new();
     if (!tok->trie) {
         free(tok);
@@ -70,16 +72,65 @@ tokenizer_t *tokenizer_create(int unk_id, int bos_id, int eos_id, int pad_id,
 
 void tokenizer_free(tokenizer_t *tok) {
     if (!tok) return;
-    if (tok->pieces) {
+    if (tok->pieces && !tok->pieces_in_arena) {
         for (int i = 0; i < tok->vocab_size; i++) {
             free(tok->pieces[i]);
         }
     }
+    free(tok->arena); /* P0-3: arena owns the piece bytes when in use */
     free(tok->pieces);
     free(tok->piece_lens);
     free(tok->scores);
     trie_free(tok->trie);
     free(tok);
+}
+
+/* P0-3: single-arena piece storage used by the binary load path. */
+int tokenizer_reserve_arena(tokenizer_t *tok, int vocab, size_t arena_bytes) {
+    if (!tok || vocab < 0) return -1;
+    char **np = (char **)malloc((size_t)(vocab ? vocab : 1) * sizeof(char *));
+    int *nl = (int *)malloc((size_t)(vocab ? vocab : 1) * sizeof(int));
+    float *ns = (float *)malloc((size_t)(vocab ? vocab : 1) * sizeof(float));
+    char *ar = (char *)malloc(arena_bytes ? arena_bytes : 1);
+    if (!np || !nl || !ns || !ar) {
+        free(np); free(nl); free(ns); free(ar);
+        set_error("tokenizer_reserve_arena: OOM");
+        return -1;
+    }
+    /* Only valid before any piece is stored (fresh tokenizer). */
+    free(tok->pieces);
+    free(tok->piece_lens);
+    free(tok->scores);
+    free(tok->arena);
+    tok->pieces = np;
+    tok->piece_lens = nl;
+    tok->scores = ns;
+    tok->arena = ar;
+    tok->arena_cap = arena_bytes;
+    tok->arena_used = 0;
+    tok->pieces_in_arena = 1;
+    tok->vocab_size = vocab;
+    for (int i = 0; i < vocab; i++) {
+        np[i] = NULL;
+        nl[i] = 0;
+        ns[i] = 0.0f;
+    }
+    return 0;
+}
+
+int tokenizer_arena_set_piece(tokenizer_t *tok, int id, const char *piece,
+                              size_t len, float score) {
+    if (!tok || !tok->pieces_in_arena || !piece) return -1;
+    if (id < 0 || id >= tok->vocab_size) return -1;
+    if (tok->arena_used + len + 1 > tok->arena_cap) return -1;
+    char *dst = tok->arena + tok->arena_used;
+    memcpy(dst, piece, len);
+    dst[len] = '\0';
+    tok->arena_used += len + 1;
+    tok->pieces[id] = dst;
+    tok->piece_lens[id] = (int)len;
+    tok->scores[id] = score;
+    return 0;
 }
 
 /* ------------------------------------------------------------------ */
@@ -135,19 +186,28 @@ int tokenizer_build_trie(tokenizer_t *tok) {
     trie_free(tok->trie);
     tok->trie = trie_new();
     if (!tok->trie) return -1;
+    /* P1-4: re-derive the byte -> <0xXX> piece id table while scanning. */
+    for (int b = 0; b < 256; b++) tok->byte_ids[b] = -1;
     for (int i = 0; i < tok->vocab_size; i++) {
         if (!tok->pieces[i]) continue;
         /* Byte-fallback placeholders are virtual: they are never matched as
          * literal text (this keeps encode/decode round-trips lossless).
          * They are expanded at decode time only. */
-        unsigned dummy = 0;
-        if (is_byte_fallback_piece(tok->pieces[i], tok->piece_lens[i], &dummy))
+        unsigned byte = 0;
+        if (is_byte_fallback_piece(tok->pieces[i], tok->piece_lens[i], &byte)) {
+            if (byte < 256 && tok->byte_ids[byte] < 0) tok->byte_ids[byte] = i;
             continue;
+        }
         if (trie_insert(tok->trie, tok->pieces[i], (size_t)tok->piece_lens[i], i) != 0) {
             return -1;
         }
     }
     return 0;
+}
+
+int tokenizer_byte_piece_id(const tokenizer_t *tok, unsigned b) {
+    if (!tok || b > 255) return -1;
+    return tok->byte_ids[b];
 }
 
 /* ------------------------------------------------------------------ */
@@ -243,6 +303,21 @@ void tokenizer_set_normalizer_hook(tokenizer_t *tok,
     }
 }
 
+/* Runtime inference-flag overrides (P0-1 / P1-4 / P1-6). See tokenizer.h.
+ * They exist so already-trained models can be re-evaluated with a fixed
+ * encoder without a retrain. */
+void tokenizer_set_norm_reversible(tokenizer_t *tok, int enable) {
+    if (tok) tok->norm_reversible = enable ? 1 : 0;
+}
+
+void tokenizer_set_segment_rules(tokenizer_t *tok, int enable) {
+    if (tok) tok->segment_rules = enable ? 1 : 0;
+}
+
+void tokenizer_set_byte_real(tokenizer_t *tok, int enable) {
+    if (tok) tok->byte_real = enable ? 1 : 0;
+}
+
 /* ------------------------------------------------------------------ */
 /* encode                                                              */
 /* ------------------------------------------------------------------ */
@@ -277,8 +352,14 @@ static char *normalize_for_encode(const tokenizer_t *tok, const char *text,
         if (r) return r;
         /* hook returned NULL => fall through to builtin */
     }
-    return normalize_text(text, len, 1 /*mark_spaces*/, tok->fold_case,
-                          out_len);
+    /* P0-1: reversible mode keeps full-width/compatibility forms intact so
+     * encode -> decode is byte-exact (fixes the U+FF0C -> U+002C round-trip
+     * failure). The legacy NFKC mode is still reachable for old models that
+     * do not set the norm_reversible flag. */
+    return normalize_text_ex(text, len, 1 /*mark_spaces*/, tok->fold_case,
+                             tok->norm_reversible ? NORM_MODE_REVERSIBLE
+                                                  : NORM_MODE_LEGACY_NFKC,
+                             out_len);
 }
 
 int tokenizer_encode(const tokenizer_t *tok, const char *text, size_t len,
@@ -315,6 +396,20 @@ int tokenizer_encode(const tokenizer_t *tok, const char *text, size_t len,
     }
     dp[0] = 0.0;
 
+    /* P1-6: deterministic segmentation constraints (digit 3-grouping and
+     * operator isolation). Built per call so encode stays stateless and
+     * thread-safe; the table only forbids edges, it never changes the piece
+     * table, so round-trips stay lossless. */
+    seg_rules_t sr;
+    memset(&sr, 0, sizeof(sr));
+    int have_rules = 0;
+    if (tok->segment_rules) {
+        if (segment_rules_build(s, n, 1 /*digit_grid*/, 1 /*op_isolation*/,
+                               3 /*min_digit_run*/, &sr) == 0 && sr.active) {
+            have_rules = 1;
+        }
+    }
+
     enum { MAX_MATCH = 64 };
     int ids[MAX_MATCH];
     size_t ends[MAX_MATCH];
@@ -328,6 +423,16 @@ int tokenizer_encode(const tokenizer_t *tok, const char *text, size_t len,
             prev[i] = (i == 0) ? 0 : i - 1;
         }
         int m = trie_match_prefixes(tok->trie, s, n, i, ids, ends, MAX_MATCH);
+        if (have_rules && m > 0) {
+            int w = 0;
+            for (int k = 0; k < m; k++) {
+                if (!segment_rules_edge_ok(&sr, i, ends[k])) continue;
+                ids[w] = ids[k];
+                ends[w] = ends[k];
+                w++;
+            }
+            m = w;
+        }
         for (int k = 0; k < m; k++) {
             size_t j = ends[k];
             int pid = ids[k];
@@ -343,8 +448,16 @@ int tokenizer_encode(const tokenizer_t *tok, const char *text, size_t len,
          * could leave dp holes that backtracking never resolved. */
         double fb = dp[i] + kByteFallbackScore;
         if (fb > dp[i + 1]) {
+            /* P1-4: with byte_real the edge emits the real <0xXX> piece when
+             * the vocabulary has one (so exports report byte fallback with a
+             * real id); otherwise the virtual id -1-byte is used. */
+            int fb_id = -1 - (int)(unsigned char)s[i];
+            if (tok->byte_real) {
+                int real = tok->byte_ids[(unsigned char)s[i]];
+                if (real >= 0) fb_id = real;
+            }
             dp[i + 1] = fb;
-            best[i + 1] = -1 - (int)(unsigned char)s[i];
+            best[i + 1] = fb_id;
             prev[i + 1] = i;
         }
     }
@@ -358,6 +471,7 @@ int tokenizer_encode(const tokenizer_t *tok, const char *text, size_t len,
              * repair/fallback paths above; decode() expands them back to raw
              * bytes. They are the ONLY legitimate negative ids here. */
             if (pid < -256) {
+                segment_rules_free(&sr);
                 free(norm); free(dp); free(best); free(prev); free(path);
                 set_error("tokenizer_encode: unreachable state");
                 return -1;
@@ -372,12 +486,14 @@ int tokenizer_encode(const tokenizer_t *tok, const char *text, size_t len,
     /* reverse into output */
     int *res = (int *)malloc(cnt * sizeof(int));
     if (!res) {
+        segment_rules_free(&sr);
         free(norm); free(dp); free(best); free(prev); free(path);
         set_error("tokenizer_encode: OOM");
         return -1;
     }
     for (size_t k = 0; k < cnt; k++) res[k] = path[cnt - 1 - k];
 
+    segment_rules_free(&sr);
     free(norm); free(dp); free(best); free(prev); free(path);
     if (out_ids) *out_ids = res; else free(res);
     if (out_n) *out_n = cnt;

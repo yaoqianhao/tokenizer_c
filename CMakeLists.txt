@@ -15,6 +15,7 @@ add_library(tokenizer STATIC
   src/trie.c
   src/tokenizer.c
   src/model.c
+  src/segment_rules.c
   src/sentencepiece.c
   src/trainer.c
 )

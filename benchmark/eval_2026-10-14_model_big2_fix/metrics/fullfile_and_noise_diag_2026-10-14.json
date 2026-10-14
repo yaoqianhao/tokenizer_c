@@ -1,0 +1,91 @@
+{
+ "withflags_extra": [
+  "--norm-reversible",
+  "--segment-rules"
+ ],
+ "v1_zh_fullfile": {
+  "bytes": 2097024,
+  "tokens": 976064,
+  "decoded_bytes": 2096703,
+  "equal": false,
+  "first_diff_at": 236,
+  "len_a": 2097024,
+  "len_b": 2096703,
+  "elapsed_s": 43.6,
+  "ctx_a": "b'\\xe5\\xb8\\x88\\xe5\\xb7\\xa5\\xe4\\xbd\\x9c\\xe5\\xae\\xa4\\xe3\\x80\\x82\\n2011\\xe5\\xb9\\xb4\\xef\\xbc\\x8c\\xe5\\x8c\\x97\\xe4'",
+  "ctx_b": "b'\\xe5\\xb8\\x88\\xe5\\xb7\\xa5\\xe4\\xbd\\x9c\\xe5\\xae\\xa4\\xe3\\x80\\x82 2011\\xe5\\xb9\\xb4\\xef\\xbc\\x8c\\xe5\\x8c\\x97\\xe4'"
+ },
+ "v2_zh_fullfile": {
+  "bytes": 2097024,
+  "tokens": 976247,
+  "decoded_bytes": 2096859,
+  "equal": false,
+  "first_diff_at": 236,
+  "len_a": 2097024,
+  "len_b": 2096859,
+  "elapsed_s": 44.6,
+  "ctx_a": "b'\\xe5\\xb8\\x88\\xe5\\xb7\\xa5\\xe4\\xbd\\x9c\\xe5\\xae\\xa4\\xe3\\x80\\x82\\n2011\\xe5\\xb9\\xb4\\xef\\xbc\\x8c\\xe5\\x8c\\x97\\xe4'",
+  "ctx_b": "b'\\xe5\\xb8\\x88\\xe5\\xb7\\xa5\\xe4\\xbd\\x9c\\xe5\\xae\\xa4\\xe3\\x80\\x82 2011\\xe5\\xb9\\xb4\\xef\\xbc\\x8c\\xe5\\x8c\\x97\\xe4'"
+ },
+ "v1_en_fullfile": {
+  "bytes": 2097141,
+  "tokens": 470513,
+  "decoded_bytes": 2096974,
+  "equal": false,
+  "first_diff_at": 1117,
+  "len_a": 2097141,
+  "len_b": 2096974,
+  "elapsed_s": 18.0,
+  "ctx_a": "b'rlds are a few.\\nI lost my son '",
+  "ctx_b": "b'rlds are a few. I lost my son '"
+ },
+ "v2_en_fullfile": {
+  "bytes": 2097141,
+  "tokens": 470569,
+  "decoded_bytes": 2097017,
+  "equal": false,
+  "first_diff_at": 1117,
+  "len_a": 2097141,
+  "len_b": 2097017,
+  "elapsed_s": 18.0,
+  "ctx_a": "b'rlds are a few.\\nI lost my son '",
+  "ctx_b": "b'rlds are a few. I lost my son '"
+ },
+ "throughput_noise": {
+  "v2_run1": {
+   "encode_tps": 1025441.43,
+   "decode_tps": 60042.856,
+   "load_ms": 72.287
+  },
+  "v2_run2": {
+   "encode_tps": 1040850.963,
+   "decode_tps": 60377.17,
+   "load_ms": 71.898
+  },
+  "v1_withflags": {
+   "encode_tps": 879489.666,
+   "decode_tps": 54675.654,
+   "load_ms": 71.59
+  },
+  "metrics_identical": {
+   "utf8_completeness": true,
+   "char_split_rate": true,
+   "boundary_crossing_rate": true,
+   "digit_boundary_f1": true,
+   "digit_split_variability": true,
+   "operator_isolation": true
+  },
+  "totals": [
+   {
+    "bytes": 37108500,
+    "tokens": 10588095,
+    "bpt": 3.504738
+   },
+   {
+    "bytes": 37108500,
+    "tokens": 10588095,
+    "bpt": 3.504738
+   }
+  ]
+ }
+}

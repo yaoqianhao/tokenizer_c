@@ -66,7 +66,10 @@ int tokenizer_save_binary(const tokenizer_t *tok, const char *path) {
     put_i32(buf + o, tok->eos_id); o += 4;
     put_i32(buf + o, tok->pad_id); o += 4;
     put_u32(buf + o, (tok->byte_fallback ? 1u : 0u) |
-                     (tok->fold_case ? 2u : 0u)); o += 4;
+                     (tok->fold_case ? 2u : 0u) |
+                     (tok->norm_reversible ? 4u : 0u) |
+                     (tok->segment_rules ? 8u : 0u) |
+                     (tok->byte_real ? 16u : 0u)); o += 4;
     for (int i = 0; i < tok->vocab_size; i++) {
         put_u32(buf + o, (uint32_t)tok->piece_lens[i]); o += 4;
         memcpy(buf + o, tok->pieces[i], (size_t)tok->piece_lens[i]);
@@ -121,32 +124,55 @@ tokenizer_t *tokenizer_load_binary_mem(const void *data, size_t size) {
         return NULL;
     }
     tokenizer_t *tok = tokenizer_create(unk, bos, eos, pad, byte_fb);
-    if (tok) tok->fold_case = fold_case; /* P1-3 */
     if (!tok) {
         tokenizer_set_error("load: OOM");
         return NULL;
     }
+    tok->fold_case = fold_case;                          /* P1-3 */
+    tok->norm_reversible = (int)((flags >> 2) & 1u);     /* P0-1 */
+    tok->segment_rules = (int)((flags >> 3) & 1u);       /* P1-6 */
+    tok->byte_real = (int)((flags >> 4) & 1u);           /* P1-4 */
+
+    /* Pass 1 over the entry headers: total piece bytes. The pieces are then
+     * stored in a single arena instead of one malloc per piece, which is the
+     * dominant cost of load_ms at 262K pieces. */
+    size_t arena_bytes = 0;
+    {
+        size_t o2 = 32;
+        for (uint32_t i = 0; i < vocab; i++) {
+            if (o2 + 8 > size) {
+                tokenizer_set_error("load: truncated vocab entry");
+                tokenizer_free(tok);
+                return NULL;
+            }
+            uint32_t plen2 = get_u32(p + o2);
+            o2 += 4;
+            if (o2 + (size_t)plen2 + 4 > size) {
+                tokenizer_set_error("load: truncated piece bytes");
+                tokenizer_free(tok);
+                return NULL;
+            }
+            arena_bytes += (size_t)plen2 + 1;
+            o2 += (size_t)plen2 + 4;
+        }
+    }
+    if (tokenizer_reserve_arena(tok, (int)vocab, arena_bytes) != 0) {
+        tokenizer_set_error("load: OOM");
+        tokenizer_free(tok);
+        return NULL;
+    }
     size_t o = 32;
     for (uint32_t i = 0; i < vocab; i++) {
-        if (o + 8 > size) {
-            tokenizer_set_error("load: truncated vocab entry");
-            tokenizer_free(tok);
-            return NULL;
-        }
         uint32_t plen = get_u32(p + o);
         o += 4;
-        if (o + plen + 4 > size) {
-            tokenizer_set_error("load: truncated piece bytes");
-            tokenizer_free(tok);
-            return NULL;
-        }
         float score = get_f32(p + o + plen);
-        if (tokenizer_set_piece(tok, (int)i, (const char *)(p + o), plen, score) != 0) {
+        if (tokenizer_arena_set_piece(tok, (int)i, (const char *)(p + o), plen,
+                                      score) != 0) {
             tokenizer_set_error("load: OOM");
             tokenizer_free(tok);
             return NULL;
         }
-        o += plen + 4;
+        o += (size_t)plen + 4;
     }
     tokenizer_clear_error();
     return tok;
@@ -158,7 +184,6 @@ tokenizer_t *tokenizer_load_binary_file(const char *path) {
         tokenizer_set_error("load: cannot open %s", path);
         return NULL;
     }
-    nfkc_prewarm(); /* P2-7: build NFKC tables on a single-threaded entry */
     int64_t sz = 0;
     if (file_size64(fp, &sz) != 0 || sz <= 0) {
         fclose(fp);
@@ -177,6 +202,12 @@ tokenizer_t *tokenizer_load_binary_file(const char *path) {
         free(buf);
         tokenizer_set_error("load: short read");
         return NULL;
+    }
+    /* P2-7: build the NFKC tables once on a single-threaded entry, but only
+     * for models that actually normalize with full NFKC (flags bit2 == 0).
+     * Reversible models skip the ~0.35 ms table build entirely. */
+    if (sz >= 32 && memcmp(buf, "TKCZ", 4) == 0 && !(get_u32(buf + 28) & 4u)) {
+        nfkc_prewarm();
     }
     tokenizer_t *tok = tokenizer_load_binary_mem(buf, (size_t)sz);
     free(buf);

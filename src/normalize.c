@@ -79,8 +79,54 @@ static int is_control_cp(uint32_t cp) {
     return 0;
 }
 
+/* Canonical (NFC-style) composition only.
+ *
+ * NORM_MODE_REVERSIBLE must not apply *compatibility* decomposition, because
+ * that folding is not invertible (U+FF0C ，-> U+002C ,). We therefore look up
+ * canonical composition pairs only: if cps[i] is a combining mark (nonzero
+ * canonical combining class) we try to compose it with the base collected in
+ * the current (maximal-ccc==0) starter segment. Uncomposable marks are kept
+ * as-is; no compatibility mapping is ever applied, so the transform is
+ * byte-lossless for already-NFC text. */
+static void nfc_compose_cps(const uint32_t *cps, size_t n, uint32_t **out,
+                            size_t *out_count) {
+    *out = NULL;
+    *out_count = 0;
+    uint32_t *buf = (uint32_t *)malloc((n ? n : 1) * sizeof(uint32_t));
+    if (!buf) return;
+    size_t on = 0;
+    size_t starter = (size_t)-1; /* index in buf of the current starter */
+    for (size_t i = 0; i < n; i++) {
+        uint32_t cp = cps[i];
+        if (nfkc_ccc(cp) != 0) {
+            int composed = 0;
+            if (starter != (size_t)-1) {
+                uint32_t l = buf[starter];
+                uint32_t c = nfkc_compose(l, cp);
+                if (c != 0) {
+                    buf[starter] = c;
+                    composed = 1;
+                }
+            }
+            if (composed) continue;
+            buf[on++] = cp;
+            continue;
+        }
+        buf[on++] = cp;
+        starter = on - 1;
+    }
+    *out = buf;
+    *out_count = on;
+}
+
 char *normalize_text(const char *text, size_t len,
                      int mark_spaces, int fold_case, size_t *out_len) {
+    return normalize_text_ex(text, len, mark_spaces, fold_case,
+                             NORM_MODE_LEGACY_NFKC, out_len);
+}
+
+char *normalize_text_ex(const char *text, size_t len, int mark_spaces,
+                        int fold_case, int mode, size_t *out_len) {
     if (out_len) *out_len = 0;
     if (!text) return NULL;
     if (len == 0) {
@@ -105,11 +151,21 @@ char *normalize_text(const char *text, size_t len,
             continue;
         }
         if (is_whitespace_cp(cp)) {
-            cp = 0x0020;
+            /* 额外发现 3（可逆性缺口）: U+3000 / U+00A0 / U+202F / U+2000-200A
+             * 等 Unicode 空白在 NFKC 下折叠为 U+0020（兼容折叠，不可逆）。
+             * 可逆模式只折叠 ASCII 空白，非 ASCII 空白原样保留，保证
+             * encode -> decode 的字节级往返；ASCII 空格仍按原规则标记为 ▁。 */
+            if (mode != NORM_MODE_REVERSIBLE || cp <= 0x007F) {
+                cp = 0x0020;
+            }
         }
         if (is_strip_cp(cp)) {
-            i += adv;
-            continue;
+            /* 额外发现 3: 零宽字符 / BOM 的删除同样是不可逆变换，可逆模式
+             * 原样保留（由 byte fallback 承载），否则往返丢字节。 */
+            if (mode != NORM_MODE_REVERSIBLE) {
+                i += adv;
+                continue;
+            }
         }
         /* compile-time full-NFKC extension hook (legacy path) */
         uint32_t mapped = 0;
@@ -133,13 +189,21 @@ char *normalize_text(const char *text, size_t len,
         if (out_len) *out_len = 0;
         return r;
     }
-    /* Pass 2: full NFKC (decompose / order / recompose). */
+    /* Pass 2: normalization stage.
+     *   mode 0 : full NFKC (compatibility decomposition + recomposition).
+     *   mode 1 : canonical composition only (NFC subset) - lossless, so
+     *            full-width punctuation is NOT folded to ASCII. */
     uint32_t *norm = NULL;
     size_t nn = 0;
-    nfkc_normalize_cps(cps, nc, &norm, &nn);
+    if (mode == NORM_MODE_REVERSIBLE) {
+        nfc_compose_cps(cps, nc, &norm, &nn);
+    } else {
+        nfkc_normalize_cps(cps, nc, &norm, &nn);
+    }
     if (!norm) {
-        /* 额外发现 2: OOM during NFKC — fail loudly instead of silently
-         * degrading to identity (consistent with "truncation == failure"). */
+        /* 额外发现 2: OOM during normalization — fail loudly instead of
+         * silently degrading to identity (consistent with "truncation ==
+         * failure"). */
         free(cps);
         return NULL;
     }

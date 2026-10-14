@@ -1,0 +1,140 @@
+{
+  "date": "2026-10-14",
+  "model": "E:\\tokenizer_c\\model_big2.tkm",
+  "vocab_size": 262144,
+  "cli_extra": [],
+  "langs": {
+    "code": {
+      "files": [
+        "code.txt"
+      ],
+      "bytes": 10641181,
+      "tokens": 2589306,
+      "bpt": 4.109665,
+      "chars_per_token": 4.109665,
+      "roundtrip_ok": true,
+      "roundtrip_mismatches": 0,
+      "roundtrip_lines": 200,
+      "stability": 0.784221,
+      "oov_rate": null,
+      "byte_fallback_rate": null,
+      "tokeval": {
+        "utf8": {
+          "utf8_completeness": 1.0,
+          "char_split_rate": null,
+          "boundary_crossing_rate": 0.0,
+          "tokens": 16286,
+          "multibyte_chars": 0
+        },
+        "digit": {
+          "digit_boundary_f1": 0.4,
+          "digit_split_variability": 1.660272,
+          "digit_spans": 30,
+          "digit_skipped": 0
+        },
+        "operator": {
+          "operator_isolation": 0.666667,
+          "operator_occurrences": 30,
+          "operator_skipped": 0
+        }
+      }
+    },
+    "en": {
+      "files": [
+        "en.txt"
+      ],
+      "bytes": 15900854,
+      "tokens": 3465038,
+      "bpt": 4.588941,
+      "chars_per_token": 4.588941,
+      "roundtrip_ok": true,
+      "roundtrip_mismatches": 0,
+      "roundtrip_lines": 200,
+      "stability": 0.791958,
+      "oov_rate": null,
+      "byte_fallback_rate": null,
+      "tokeval": {
+        "utf8": {
+          "utf8_completeness": 1.0,
+          "char_split_rate": null,
+          "boundary_crossing_rate": 0.0,
+          "tokens": 18860,
+          "multibyte_chars": 0
+        },
+        "digit": {
+          "digit_boundary_f1": null,
+          "digit_split_variability": null,
+          "digit_spans": 0,
+          "digit_skipped": 0
+        },
+        "operator": {
+          "operator_isolation": 0.2,
+          "operator_occurrences": 30,
+          "operator_skipped": 0
+        }
+      }
+    },
+    "zh": {
+      "files": [
+        "zh.txt"
+      ],
+      "bytes": 10566465,
+      "tokens": 4255802,
+      "bpt": 2.482838,
+      "chars_per_token": 0.852894,
+      "roundtrip_ok": false,
+      "roundtrip_mismatches": 85,
+      "roundtrip_lines": 200,
+      "stability": 0.98997,
+      "oov_rate": null,
+      "byte_fallback_rate": null,
+      "tokeval": {
+        "utf8": {
+          "utf8_completeness": 0.637855,
+          "char_split_rate": 0.172494,
+          "boundary_crossing_rate": 0.0,
+          "tokens": 52479,
+          "multibyte_chars": 429
+        },
+        "digit": {
+          "digit_boundary_f1": null,
+          "digit_split_variability": null,
+          "digit_spans": 0,
+          "digit_skipped": 0
+        },
+        "operator": {
+          "operator_isolation": null,
+          "operator_occurrences": 0,
+          "operator_skipped": 0
+        }
+      }
+    }
+  },
+  "totals": {
+    "bytes": 37108500,
+    "tokens": 10310146,
+    "bpt": 3.599222
+  },
+  "roundtrip_ok": false,
+  "tokeval": {
+    "utf8_completeness": 0.879285,
+    "char_split_rate": 0.172494,
+    "boundary_crossing_rate": 0.0,
+    "digit_boundary_f1": 0.4,
+    "digit_split_variability": 1.660272,
+    "operator_isolation": 0.433334
+  },
+  "stability": {
+    "per_lang": {
+      "code": 0.784221,
+      "en": 0.791958,
+      "zh": 0.98997
+    },
+    "overall": 0.855383
+  },
+  "throughput": {
+    "encode_tps": 934443.784,
+    "decode_tps": 52948.353,
+    "load_ms": 73.874
+  }
+}

@@ -980,11 +980,11 @@ int tokenizer_train(const tokenizer_train_options *opts) {
                     free(pairs);
                 }
             }
-            /* concat: specials + top normals + bytefb */
-            int pos = 0;
-            for (int b = 0; b < 3; b++)
-                for (int i = 0; i < bn[b]; i++)
-                    order[pos++] = buckets[b][i];
+            /* P1-4 修复（2026-10-14）：byte-fallback 的 256 个字面 piece 必须
+             * 常驻，不能被剪枝丢掉。剪枝保留区顺序改为 specials + bytefb +
+             * 高分 normals：旧的 "specials + normals + bytefb" 顺序在截断到
+             * nkeep 时必然把排在队尾的 256 个字节 piece 全部丢掉（实测
+             * probe 训练后模型内 <0xXX> piece = 0）。 */
             int nkeep = vsz;
             if (shrink_pct > 0 && vsz > (int)vocab_target) {
                 int by_shrink = (int)((size_t)vsz * (size_t)shrink_pct / 100);
@@ -993,6 +993,14 @@ int tokenizer_train(const tokenizer_train_options *opts) {
                 if (nkeep < 4 + n_fb) nkeep = 4 + n_fb;
                 if (nkeep > vsz) nkeep = vsz;
             }
+            int keep_norm = nkeep - bn[0] - bn[2];
+            if (keep_norm < 0) keep_norm = 0;
+            if (keep_norm > bn[1]) keep_norm = bn[1];
+            int pos = 0;
+            for (int i = 0; i < bn[0]; i++) order[pos++] = buckets[0][i];
+            for (int i = 0; i < bn[2]; i++) order[pos++] = buckets[2][i];
+            for (int i = 0; i < keep_norm; i++) order[pos++] = buckets[1][i];
+            nkeep = pos;
             /* rebuild arrays in the new order */
             char **np = (char **)malloc((size_t)nkeep * sizeof(char *));
             int *nl = (int *)malloc((size_t)nkeep * sizeof(int));

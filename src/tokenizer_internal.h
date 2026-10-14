@@ -6,6 +6,7 @@
 #include "trie.h"
 #include "utf8.h"
 #include "normalize.h"
+#include "segment_rules.h"
 #include "nfkc.h"
 
 #include <stddef.h>
@@ -52,9 +53,21 @@ struct tokenizer {
     int pad_id;
     int byte_fallback;  /* nonzero => <0xXX> fallback enabled */
     int fold_case;      /* nonzero => normalize folded case at encode (P1-3) */
+    int norm_reversible;/* nonzero => NFC-only normalization at encode (P0-1) */
+    int segment_rules;  /* nonzero => deterministic digit/operator cuts (P1-6) */
+    int byte_real;      /* nonzero => emit real <0xXX> pieces, not virtual ids
+                         * (-1-byte) on the byte-fallback path (P1-4) */
     trie_t *trie;       /* rebuilt by tokenizer_build_trie() */
     tokenizer_normalizer_hook_fn norm_hook;
     void *norm_userdata;
+    /* P0-3: optional single-arena piece storage (one malloc for all pieces)
+     * used by the binary load path; when pieces_in_arena is set, pieces[i]
+     * point into `arena` and must not be freed individually. */
+    char *arena;
+    size_t arena_cap;
+    size_t arena_used;
+    int pieces_in_arena;
+    int byte_ids[256];  /* piece id of <0xXX> per byte, -1 when absent (P1-4) */
 };
 
 /* Set the thread-local last-error message (printf-style). */
@@ -74,9 +87,23 @@ int tokenizer_set_piece(tokenizer_t *tok, int id, const char *piece,
 /* Rebuild the internal trie from current pieces. Returns 0 on success. */
 int tokenizer_build_trie(tokenizer_t *tok);
 
+/* P0-3 arena fast path (model.c load): reserve `vocab` piece slots and an
+ * arena of `arena_bytes`; pieces are then stored with tokenizer_arena_set_piece
+ * which never calls malloc per piece (lower load_ms). Only valid on a fresh
+ * tokenizer that owns no pieces yet. Both return 0 on success. */
+int tokenizer_reserve_arena(tokenizer_t *tok, int vocab, size_t arena_bytes);
+int tokenizer_arena_set_piece(tokenizer_t *tok, int id, const char *piece,
+                              size_t len, float score);
+
+/* P1-4: id of the real "<0xXX>" piece for raw byte b, or -1 when the vocab has
+ * no such piece. Filled by tokenizer_build_trie(). */
+int tokenizer_byte_piece_id(const tokenizer_t *tok, unsigned b);
+
 /* model.c: binary model format:
  *   magic "TKCZ" (4B), version u32 (=1), vocab u32,
- *   unk,bos,eos,pad i32 x4, flags u32 (bit0=byte_fallback),
+ *   unk,bos,eos,pad i32 x4, flags u32
+ *     (bit0 = byte_fallback, bit1 = fold_case, bit2 = norm_reversible,
+ *      bit3 = segment_rules (P1-6), bit4 = learned byte-fallback scores),
  *   then vocab entries: u32 len, len bytes, f32 score. Little-endian. */
 int tokenizer_save_binary(const tokenizer_t *tok, const char *path);
 tokenizer_t *tokenizer_load_binary_file(const char *path);

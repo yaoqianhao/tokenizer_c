@@ -1,0 +1,466 @@
+{
+ "model": "E:\\tokenizer_c\\model_big2.tkm",
+ "cli": "E:\\tokenizer_c\\benchmark\\eval_2026-10-14_model_big2_fix\\bin\\tok-cli-fix.exe",
+ "vocab_pieces": 262144,
+ "configs": {
+  "noflags": {
+   "cli_extra": [],
+   "roundtrip_real_stripped": {
+    "en": {
+     "ok": false,
+     "mismatch": 7,
+     "tested": 200
+    },
+    "zh": {
+     "ok": false,
+     "mismatch": 191,
+     "tested": 200
+    },
+    "code": {
+     "ok": true,
+     "mismatch": 0,
+     "tested": 200
+    }
+   },
+   "roundtrip_real_raw": {
+    "en": {
+     "ok": false,
+     "mismatch": 200,
+     "tested": 200
+    },
+    "zh": {
+     "ok": false,
+     "mismatch": 200,
+     "tested": 200
+    },
+    "code": {
+     "ok": false,
+     "mismatch": 200,
+     "tested": 200
+    }
+   }
+  },
+  "withflags": {
+   "cli_extra": [
+    "--norm-reversible",
+    "--segment-rules"
+   ],
+   "roundtrip_real_stripped": {
+    "en": {
+     "ok": true,
+     "mismatch": 0,
+     "tested": 200
+    },
+    "zh": {
+     "ok": false,
+     "mismatch": 3,
+     "tested": 200
+    },
+    "code": {
+     "ok": true,
+     "mismatch": 0,
+     "tested": 200
+    }
+   },
+   "roundtrip_real_raw": {
+    "en": {
+     "ok": false,
+     "mismatch": 200,
+     "tested": 200
+    },
+    "zh": {
+     "ok": false,
+     "mismatch": 200,
+     "tested": 200
+    },
+    "code": {
+     "ok": false,
+     "mismatch": 200,
+     "tested": 200
+    }
+   }
+  }
+ },
+ "fullwidth_probe": {
+  "noflags": {
+   "，": {
+    "u": "U+FF0C",
+    "n_tokens": 1,
+    "ids": [
+     6
+    ],
+    "pieces": [
+     ","
+    ],
+    "byte_fallback": 0,
+    "decode_eq": false,
+    "decoded": ","
+   },
+   "。": {
+    "u": "U+3002",
+    "n_tokens": 1,
+    "ids": [
+     13
+    ],
+    "pieces": [
+     "。"
+    ],
+    "byte_fallback": 0,
+    "decode_eq": true,
+    "decoded": "。"
+   },
+   "：": {
+    "u": "U+FF1A",
+    "n_tokens": 1,
+    "ids": [
+     58
+    ],
+    "pieces": [
+     ":"
+    ],
+    "byte_fallback": 0,
+    "decode_eq": false,
+    "decoded": ":"
+   },
+   "（": {
+    "u": "U+FF08",
+    "n_tokens": 1,
+    "ids": [
+     26
+    ],
+    "pieces": [
+     "("
+    ],
+    "byte_fallback": 0,
+    "decode_eq": false,
+    "decoded": "("
+   },
+   "）": {
+    "u": "U+FF09",
+    "n_tokens": 1,
+    "ids": [
+     34
+    ],
+    "pieces": [
+     ")"
+    ],
+    "byte_fallback": 0,
+    "decode_eq": false,
+    "decoded": ")"
+   },
+   "！": {
+    "u": "U+FF01",
+    "n_tokens": 1,
+    "ids": [
+     98
+    ],
+    "pieces": [
+     "!"
+    ],
+    "byte_fallback": 0,
+    "decode_eq": false,
+    "decoded": "!"
+   },
+   "？": {
+    "u": "U+FF1F",
+    "n_tokens": 1,
+    "ids": [
+     163
+    ],
+    "pieces": [
+     "?"
+    ],
+    "byte_fallback": 0,
+    "decode_eq": false,
+    "decoded": "?"
+   },
+   "“": {
+    "u": "U+201C",
+    "n_tokens": 1,
+    "ids": [
+     60
+    ],
+    "pieces": [
+     "“"
+    ],
+    "byte_fallback": 0,
+    "decode_eq": true,
+    "decoded": "“"
+   },
+   "”": {
+    "u": "U+201D",
+    "n_tokens": 1,
+    "ids": [
+     64
+    ],
+    "pieces": [
+     "”"
+    ],
+    "byte_fallback": 0,
+    "decode_eq": true,
+    "decoded": "”"
+   },
+   "、": {
+    "u": "U+3001",
+    "n_tokens": 1,
+    "ids": [
+     15
+    ],
+    "pieces": [
+     "、"
+    ],
+    "byte_fallback": 0,
+    "decode_eq": true,
+    "decoded": "、"
+   },
+   "·": {
+    "u": "U+00B7",
+    "n_tokens": 1,
+    "ids": [
+     554
+    ],
+    "pieces": [
+     "·"
+    ],
+    "byte_fallback": 0,
+    "decode_eq": true,
+    "decoded": "·"
+   },
+   "～": {
+    "u": "U+FF5E",
+    "n_tokens": 1,
+    "ids": [
+     -127
+    ],
+    "pieces": [
+     "~"
+    ],
+    "byte_fallback": 1,
+    "decode_eq": false,
+    "decoded": "~"
+   }
+  },
+  "norm_only": {
+   "，": {
+    "u": "U+FF0C",
+    "n_tokens": 3,
+    "ids": [
+     -240,
+     -189,
+     -141
+    ],
+    "pieces": [
+     "�",
+     "�",
+     "�"
+    ],
+    "byte_fallback": 3,
+    "decode_eq": true,
+    "decoded": "，"
+   },
+   "。": {
+    "u": "U+3002",
+    "n_tokens": 1,
+    "ids": [
+     13
+    ],
+    "pieces": [
+     "。"
+    ],
+    "byte_fallback": 0,
+    "decode_eq": true,
+    "decoded": "。"
+   },
+   "：": {
+    "u": "U+FF1A",
+    "n_tokens": 3,
+    "ids": [
+     -240,
+     -189,
+     -155
+    ],
+    "pieces": [
+     "�",
+     "�",
+     "�"
+    ],
+    "byte_fallback": 3,
+    "decode_eq": true,
+    "decoded": "："
+   },
+   "（": {
+    "u": "U+FF08",
+    "n_tokens": 3,
+    "ids": [
+     -240,
+     -189,
+     -137
+    ],
+    "pieces": [
+     "�",
+     "�",
+     "�"
+    ],
+    "byte_fallback": 3,
+    "decode_eq": true,
+    "decoded": "（"
+   },
+   "）": {
+    "u": "U+FF09",
+    "n_tokens": 3,
+    "ids": [
+     -240,
+     -189,
+     -138
+    ],
+    "pieces": [
+     "�",
+     "�",
+     "�"
+    ],
+    "byte_fallback": 3,
+    "decode_eq": true,
+    "decoded": "）"
+   },
+   "！": {
+    "u": "U+FF01",
+    "n_tokens": 3,
+    "ids": [
+     -240,
+     -189,
+     -130
+    ],
+    "pieces": [
+     "�",
+     "�",
+     "�"
+    ],
+    "byte_fallback": 3,
+    "decode_eq": true,
+    "decoded": "！"
+   },
+   "？": {
+    "u": "U+FF1F",
+    "n_tokens": 3,
+    "ids": [
+     -240,
+     -189,
+     -160
+    ],
+    "pieces": [
+     "�",
+     "�",
+     "�"
+    ],
+    "byte_fallback": 3,
+    "decode_eq": true,
+    "decoded": "？"
+   },
+   "“": {
+    "u": "U+201C",
+    "n_tokens": 1,
+    "ids": [
+     60
+    ],
+    "pieces": [
+     "“"
+    ],
+    "byte_fallback": 0,
+    "decode_eq": true,
+    "decoded": "“"
+   },
+   "”": {
+    "u": "U+201D",
+    "n_tokens": 1,
+    "ids": [
+     64
+    ],
+    "pieces": [
+     "”"
+    ],
+    "byte_fallback": 0,
+    "decode_eq": true,
+    "decoded": "”"
+   },
+   "、": {
+    "u": "U+3001",
+    "n_tokens": 1,
+    "ids": [
+     15
+    ],
+    "pieces": [
+     "、"
+    ],
+    "byte_fallback": 0,
+    "decode_eq": true,
+    "decoded": "、"
+   },
+   "·": {
+    "u": "U+00B7",
+    "n_tokens": 1,
+    "ids": [
+     554
+    ],
+    "pieces": [
+     "·"
+    ],
+    "byte_fallback": 0,
+    "decode_eq": true,
+    "decoded": "·"
+   },
+   "～": {
+    "u": "U+FF5E",
+    "n_tokens": 3,
+    "ids": [
+     -240,
+     -190,
+     -159
+    ],
+    "pieces": [
+     "�",
+     "�",
+     "�"
+    ],
+    "byte_fallback": 3,
+    "decode_eq": true,
+    "decoded": "～"
+   }
+  }
+ },
+ "byte_fallback_audit": {
+  "noflags": {
+   "en": {
+    "tokens": 459915,
+    "byte_fallback_tokens": 389,
+    "byte_fallback_ratio": 0.0008
+   },
+   "zh": {
+    "tokens": 883092,
+    "byte_fallback_tokens": 378708,
+    "byte_fallback_ratio": 0.4288
+   },
+   "code": {
+    "tokens": 620523,
+    "byte_fallback_tokens": 11874,
+    "byte_fallback_ratio": 0.0191
+   }
+  },
+  "withflags": {
+   "en": {
+    "tokens": 470513,
+    "byte_fallback_tokens": 1701,
+    "byte_fallback_ratio": 0.0036
+   },
+   "zh": {
+    "tokens": 976064,
+    "byte_fallback_tokens": 490220,
+    "byte_fallback_ratio": 0.5022
+   },
+   "code": {
+    "tokens": 662613,
+    "byte_fallback_tokens": 13156,
+    "byte_fallback_ratio": 0.0199
+   }
+  }
+ }
+}

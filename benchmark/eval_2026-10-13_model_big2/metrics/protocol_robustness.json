@@ -1,0 +1,1119 @@
+{
+  "date": "2026-10-14",
+  "title": "协议鲁棒性指标报告（2026-10-14）",
+  "generated_by": "benchmark/eval_metrics.py 新增函数 compute_protocol_robustness / protocol_audit_files / protocol_dispersion / protocol_verdict / protocol_macro / render_protocol_markdown；由 scripts/protocol_robustness.py 编排",
+  "definitions": {
+    "D_lang": "BPT_eval / BPT_real，逐语种（en/zh/code），BPT = bytes / tokens",
+    "dispersion": "max(D) - min(D)，并附三语种总体标准差 std 与等权均值 mean",
+    "protocol_audit": "逐语料文件：行数 lines / 总字符数 chars / 不同字符数 distinct_chars / 不同汉字数 distinct_cjk_chars / 重复行率 dup_line_rate",
+    "aggregate": "并列输出按字节加权 bpt_total 与三语种等权 macro 平均"
+  },
+  "thresholds": {
+    "stable_max": 0.35,
+    "sensitive_max": 1.0,
+    "rule": "dispersion ≤ 0.35 稳定 / 0.35 < dispersion ≤ 1.0 敏感 / > 1.0 口径依赖"
+  },
+  "corpus": {
+    "slices_dir": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain",
+    "full_corpus_dir": "E:\\tokenizer_c\\benchmark\\corpus",
+    "files": {
+      "eval_en": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\eval_en.txt",
+      "en_real": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\en_real.txt",
+      "corpus_en": "E:\\tokenizer_c\\benchmark\\corpus\\en\\en.txt",
+      "eval_zh": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\eval_zh.txt",
+      "zh_real": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\zh_real.txt",
+      "corpus_zh": "E:\\tokenizer_c\\benchmark\\corpus\\zh\\zh.txt",
+      "eval_code": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\eval_code.txt",
+      "code_real": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\code_real.txt",
+      "corpus_code": "E:\\tokenizer_c\\benchmark\\corpus\\code\\code.txt"
+    },
+    "note": "real_* 复用 scripts/indomain_compare.py、indomain_compare2.py 生成 real_* 的同一语料来源，本次未引入新语料；厂商基线未重跑。",
+    "protocol_audit": {
+      "eval_en": {
+        "file": "eval_en.txt",
+        "path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\eval_en.txt",
+        "bytes": 2097084,
+        "lines": 22777,
+        "chars": 2097084,
+        "distinct_chars": 61,
+        "distinct_cjk_chars": 0,
+        "dup_line_count": 11286,
+        "dup_line_rate": 0.4955
+      },
+      "en_real": {
+        "file": "en_real.txt",
+        "path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\en_real.txt",
+        "bytes": 2097141,
+        "lines": 8238,
+        "chars": 2087058,
+        "distinct_chars": 274,
+        "distinct_cjk_chars": 11,
+        "dup_line_count": 0,
+        "dup_line_rate": 0.0
+      },
+      "corpus_en": {
+        "file": "en.txt",
+        "path": "E:\\tokenizer_c\\benchmark\\corpus\\en\\en.txt",
+        "bytes": 15900854,
+        "lines": 172125,
+        "chars": 15900854,
+        "distinct_chars": 61,
+        "distinct_cjk_chars": 0,
+        "dup_line_count": 88201,
+        "dup_line_rate": 0.512424
+      },
+      "eval_zh": {
+        "file": "eval_zh.txt",
+        "path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\eval_zh.txt",
+        "bytes": 2097089,
+        "lines": 15973,
+        "chars": 720327,
+        "distinct_chars": 431,
+        "distinct_cjk_chars": 427,
+        "dup_line_count": 38,
+        "dup_line_rate": 0.002379
+      },
+      "zh_real": {
+        "file": "zh_real.txt",
+        "path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\zh_real.txt",
+        "bytes": 2097024,
+        "lines": 7111,
+        "chars": 739339,
+        "distinct_chars": 4508,
+        "distinct_cjk_chars": 4113,
+        "dup_line_count": 0,
+        "dup_line_rate": 0.0
+      },
+      "corpus_zh": {
+        "file": "zh.txt",
+        "path": "E:\\tokenizer_c\\benchmark\\corpus\\zh\\zh.txt",
+        "bytes": 10566465,
+        "lines": 80694,
+        "chars": 3629747,
+        "distinct_chars": 431,
+        "distinct_cjk_chars": 427,
+        "dup_line_count": 808,
+        "dup_line_rate": 0.010013
+      },
+      "eval_code": {
+        "file": "eval_code.txt",
+        "path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\eval_code.txt",
+        "bytes": 2097122,
+        "lines": 30739,
+        "chars": 2097122,
+        "distinct_chars": 81,
+        "distinct_cjk_chars": 0,
+        "dup_line_count": 20454,
+        "dup_line_rate": 0.665409
+      },
+      "code_real": {
+        "file": "code_real.txt",
+        "path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\code_real.txt",
+        "bytes": 2097142,
+        "lines": 52739,
+        "chars": 2090366,
+        "distinct_chars": 760,
+        "distinct_cjk_chars": 533,
+        "dup_line_count": 17667,
+        "dup_line_rate": 0.334989
+      },
+      "corpus_code": {
+        "file": "code.txt",
+        "path": "E:\\tokenizer_c\\benchmark\\corpus\\code\\code.txt",
+        "bytes": 10641181,
+        "lines": 155408,
+        "chars": 10641181,
+        "distinct_chars": 81,
+        "distinct_cjk_chars": 0,
+        "dup_line_count": 105059,
+        "dup_line_rate": 0.676021
+      }
+    }
+  },
+  "models": {
+    "model_big2": {
+      "model": "E:\\tokenizer_c\\model_big2.tkm",
+      "langs": [
+        "en",
+        "zh",
+        "code"
+      ],
+      "per_lang": {
+        "en": {
+          "eval_path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\eval_en.txt",
+          "real_path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\en_real.txt",
+          "eval": {
+            "bytes": 2097084,
+            "tokens": 456917,
+            "bpt": 4.589639
+          },
+          "real": {
+            "bytes": 2097141,
+            "tokens": 459915,
+            "bpt": 4.559845
+          },
+          "D": 1.006534
+        },
+        "zh": {
+          "eval_path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\eval_zh.txt",
+          "real_path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\zh_real.txt",
+          "eval": {
+            "bytes": 2097089,
+            "tokens": 843849,
+            "bpt": 2.485147
+          },
+          "real": {
+            "bytes": 2097024,
+            "tokens": 883092,
+            "bpt": 2.374638
+          },
+          "D": 1.046537
+        },
+        "code": {
+          "eval_path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\eval_code.txt",
+          "real_path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\code_real.txt",
+          "eval": {
+            "bytes": 2097122,
+            "tokens": 511384,
+            "bpt": 4.100875
+          },
+          "real": {
+            "bytes": 2097142,
+            "tokens": 620523,
+            "bpt": 3.379636
+          },
+          "D": 1.213407
+        }
+      },
+      "D": {
+        "en": 1.006534,
+        "zh": 1.046537,
+        "code": 1.213407
+      },
+      "dispersion": {
+        "max_minus_min": 0.206873,
+        "mean": 1.088826,
+        "std": 0.089593,
+        "n": 3
+      },
+      "verdict": {
+        "level": "稳定",
+        "text": "口径稳定：评测语料与真实语料结论一致（dispersion=0.2069 ≤ 0.35）"
+      },
+      "aggregate": {
+        "bpt_macro": 3.727148,
+        "per_lang_bpt": {
+          "en": 4.588941,
+          "zh": 2.482838,
+          "code": 4.109665
+        },
+        "source": "corpus/<lang>/<lang>.txt 整语料实测（bytes/tokens）",
+        "bpt_total_byte_weighted": 3.599222
+      },
+      "thresholds": {
+        "stable_max": 0.35,
+        "sensitive_max": 1.0
+      },
+      "source": "本机 CLI 实测（加速版 CLI，切片+整语料同口径）",
+      "corpus": {
+        "slices_dir": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain",
+        "full_corpus_dir": "E:\\tokenizer_c\\benchmark\\corpus"
+      },
+      "corpus_audit": {
+        "eval_en": {
+          "file": "eval_en.txt",
+          "path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\eval_en.txt",
+          "bytes": 2097084,
+          "lines": 22777,
+          "chars": 2097084,
+          "distinct_chars": 61,
+          "distinct_cjk_chars": 0,
+          "dup_line_count": 11286,
+          "dup_line_rate": 0.4955
+        },
+        "en_real": {
+          "file": "en_real.txt",
+          "path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\en_real.txt",
+          "bytes": 2097141,
+          "lines": 8238,
+          "chars": 2087058,
+          "distinct_chars": 274,
+          "distinct_cjk_chars": 11,
+          "dup_line_count": 0,
+          "dup_line_rate": 0.0
+        },
+        "corpus_en": {
+          "file": "en.txt",
+          "path": "E:\\tokenizer_c\\benchmark\\corpus\\en\\en.txt",
+          "bytes": 15900854,
+          "lines": 172125,
+          "chars": 15900854,
+          "distinct_chars": 61,
+          "distinct_cjk_chars": 0,
+          "dup_line_count": 88201,
+          "dup_line_rate": 0.512424
+        },
+        "eval_zh": {
+          "file": "eval_zh.txt",
+          "path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\eval_zh.txt",
+          "bytes": 2097089,
+          "lines": 15973,
+          "chars": 720327,
+          "distinct_chars": 431,
+          "distinct_cjk_chars": 427,
+          "dup_line_count": 38,
+          "dup_line_rate": 0.002379
+        },
+        "zh_real": {
+          "file": "zh_real.txt",
+          "path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\zh_real.txt",
+          "bytes": 2097024,
+          "lines": 7111,
+          "chars": 739339,
+          "distinct_chars": 4508,
+          "distinct_cjk_chars": 4113,
+          "dup_line_count": 0,
+          "dup_line_rate": 0.0
+        },
+        "corpus_zh": {
+          "file": "zh.txt",
+          "path": "E:\\tokenizer_c\\benchmark\\corpus\\zh\\zh.txt",
+          "bytes": 10566465,
+          "lines": 80694,
+          "chars": 3629747,
+          "distinct_chars": 431,
+          "distinct_cjk_chars": 427,
+          "dup_line_count": 808,
+          "dup_line_rate": 0.010013
+        },
+        "eval_code": {
+          "file": "eval_code.txt",
+          "path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\eval_code.txt",
+          "bytes": 2097122,
+          "lines": 30739,
+          "chars": 2097122,
+          "distinct_chars": 81,
+          "distinct_cjk_chars": 0,
+          "dup_line_count": 20454,
+          "dup_line_rate": 0.665409
+        },
+        "code_real": {
+          "file": "code_real.txt",
+          "path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\code_real.txt",
+          "bytes": 2097142,
+          "lines": 52739,
+          "chars": 2090366,
+          "distinct_chars": 760,
+          "distinct_cjk_chars": 533,
+          "dup_line_count": 17667,
+          "dup_line_rate": 0.334989
+        },
+        "corpus_code": {
+          "file": "code.txt",
+          "path": "E:\\tokenizer_c\\benchmark\\corpus\\code\\code.txt",
+          "bytes": 10641181,
+          "lines": 155408,
+          "chars": 10641181,
+          "distinct_chars": 81,
+          "distinct_cjk_chars": 0,
+          "dup_line_count": 105059,
+          "dup_line_rate": 0.676021
+        }
+      },
+      "label": "model_big2"
+    },
+    "model_big": {
+      "model": "E:\\tokenizer_c\\model_big.tkm",
+      "langs": [
+        "en",
+        "zh",
+        "code"
+      ],
+      "per_lang": {
+        "en": {
+          "eval_path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\eval_en.txt",
+          "real_path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\en_real.txt",
+          "eval": {
+            "bytes": 2097084,
+            "tokens": 454941,
+            "bpt": 4.609574
+          },
+          "real": {
+            "bytes": 2097141,
+            "tokens": 457848,
+            "bpt": 4.580431
+          },
+          "D": 1.006363
+        },
+        "zh": {
+          "eval_path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\eval_zh.txt",
+          "real_path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\zh_real.txt",
+          "eval": {
+            "bytes": 2097089,
+            "tokens": 845762,
+            "bpt": 2.479526
+          },
+          "real": {
+            "bytes": 2097024,
+            "tokens": 883862,
+            "bpt": 2.372569
+          },
+          "D": 1.045081
+        },
+        "code": {
+          "eval_path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\eval_code.txt",
+          "real_path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\code_real.txt",
+          "eval": {
+            "bytes": 2097122,
+            "tokens": 509820,
+            "bpt": 4.113456
+          },
+          "real": {
+            "bytes": 2097142,
+            "tokens": 622748,
+            "bpt": 3.367561
+          },
+          "D": 1.221494
+        }
+      },
+      "D": {
+        "en": 1.006363,
+        "zh": 1.045081,
+        "code": 1.221494
+      },
+      "dispersion": {
+        "max_minus_min": 0.215131,
+        "mean": 1.090979,
+        "std": 0.093632,
+        "n": 3
+      },
+      "verdict": {
+        "level": "稳定",
+        "text": "口径稳定：评测语料与真实语料结论一致（dispersion=0.2151 ≤ 0.35）"
+      },
+      "aggregate": {
+        "bpt_macro": 3.735814,
+        "per_lang_bpt": {
+          "en": 4.608317,
+          "zh": 2.477135,
+          "code": 4.12199
+        },
+        "source": "corpus/<lang>/<lang>.txt 整语料实测（bytes/tokens）",
+        "bpt_total_byte_weighted": 3.603595
+      },
+      "thresholds": {
+        "stable_max": 0.35,
+        "sensitive_max": 1.0
+      },
+      "source": "本机 CLI 实测（加速版 CLI，切片+整语料同口径）",
+      "corpus": {
+        "slices_dir": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain",
+        "full_corpus_dir": "E:\\tokenizer_c\\benchmark\\corpus"
+      },
+      "corpus_audit": {
+        "eval_en": {
+          "file": "eval_en.txt",
+          "path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\eval_en.txt",
+          "bytes": 2097084,
+          "lines": 22777,
+          "chars": 2097084,
+          "distinct_chars": 61,
+          "distinct_cjk_chars": 0,
+          "dup_line_count": 11286,
+          "dup_line_rate": 0.4955
+        },
+        "en_real": {
+          "file": "en_real.txt",
+          "path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\en_real.txt",
+          "bytes": 2097141,
+          "lines": 8238,
+          "chars": 2087058,
+          "distinct_chars": 274,
+          "distinct_cjk_chars": 11,
+          "dup_line_count": 0,
+          "dup_line_rate": 0.0
+        },
+        "corpus_en": {
+          "file": "en.txt",
+          "path": "E:\\tokenizer_c\\benchmark\\corpus\\en\\en.txt",
+          "bytes": 15900854,
+          "lines": 172125,
+          "chars": 15900854,
+          "distinct_chars": 61,
+          "distinct_cjk_chars": 0,
+          "dup_line_count": 88201,
+          "dup_line_rate": 0.512424
+        },
+        "eval_zh": {
+          "file": "eval_zh.txt",
+          "path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\eval_zh.txt",
+          "bytes": 2097089,
+          "lines": 15973,
+          "chars": 720327,
+          "distinct_chars": 431,
+          "distinct_cjk_chars": 427,
+          "dup_line_count": 38,
+          "dup_line_rate": 0.002379
+        },
+        "zh_real": {
+          "file": "zh_real.txt",
+          "path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\zh_real.txt",
+          "bytes": 2097024,
+          "lines": 7111,
+          "chars": 739339,
+          "distinct_chars": 4508,
+          "distinct_cjk_chars": 4113,
+          "dup_line_count": 0,
+          "dup_line_rate": 0.0
+        },
+        "corpus_zh": {
+          "file": "zh.txt",
+          "path": "E:\\tokenizer_c\\benchmark\\corpus\\zh\\zh.txt",
+          "bytes": 10566465,
+          "lines": 80694,
+          "chars": 3629747,
+          "distinct_chars": 431,
+          "distinct_cjk_chars": 427,
+          "dup_line_count": 808,
+          "dup_line_rate": 0.010013
+        },
+        "eval_code": {
+          "file": "eval_code.txt",
+          "path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\eval_code.txt",
+          "bytes": 2097122,
+          "lines": 30739,
+          "chars": 2097122,
+          "distinct_chars": 81,
+          "distinct_cjk_chars": 0,
+          "dup_line_count": 20454,
+          "dup_line_rate": 0.665409
+        },
+        "code_real": {
+          "file": "code_real.txt",
+          "path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\code_real.txt",
+          "bytes": 2097142,
+          "lines": 52739,
+          "chars": 2090366,
+          "distinct_chars": 760,
+          "distinct_cjk_chars": 533,
+          "dup_line_count": 17667,
+          "dup_line_rate": 0.334989
+        },
+        "corpus_code": {
+          "file": "code.txt",
+          "path": "E:\\tokenizer_c\\benchmark\\corpus\\code\\code.txt",
+          "bytes": 10641181,
+          "lines": 155408,
+          "chars": 10641181,
+          "distinct_chars": 81,
+          "distinct_cjk_chars": 0,
+          "dup_line_count": 105059,
+          "dup_line_rate": 0.676021
+        }
+      },
+      "label": "model_big"
+    },
+    "model_256k": {
+      "model": "E:\\tokenizer_c\\benchmark\\model_256k.tkm",
+      "langs": [
+        "en",
+        "zh",
+        "code"
+      ],
+      "per_lang": {
+        "en": {
+          "eval_path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\eval_en.txt",
+          "real_path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\en_real.txt",
+          "eval": {
+            "bytes": 2097084,
+            "tokens": 282101,
+            "bpt": 7.433806
+          },
+          "real": {
+            "bytes": 2097141,
+            "tokens": 1401024,
+            "bpt": 1.496863
+          },
+          "D": 4.966257
+        },
+        "zh": {
+          "eval_path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\eval_zh.txt",
+          "real_path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\zh_real.txt",
+          "eval": {
+            "bytes": 2097089,
+            "tokens": 257165,
+            "bpt": 8.154644
+          },
+          "real": {
+            "bytes": 2097024,
+            "tokens": 1212925,
+            "bpt": 1.728898
+          },
+          "D": 4.716672
+        },
+        "code": {
+          "eval_path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\eval_code.txt",
+          "real_path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\code_real.txt",
+          "eval": {
+            "bytes": 2097122,
+            "tokens": 288042,
+            "bpt": 7.280612
+          },
+          "real": {
+            "bytes": 2097142,
+            "tokens": 1461167,
+            "bpt": 1.435251
+          },
+          "D": 5.07271
+        }
+      },
+      "D": {
+        "en": 4.966257,
+        "zh": 4.716672,
+        "code": 5.07271
+      },
+      "dispersion": {
+        "max_minus_min": 0.356038,
+        "mean": 4.918546,
+        "std": 0.149216,
+        "n": 3
+      },
+      "verdict": {
+        "level": "敏感",
+        "text": "口径敏感：评测语料会放大或缩小真实表现，跨口径数值不可直接混用（0.35 < dispersion=0.3560 ≤ 1.00）"
+      },
+      "aggregate": {
+        "bpt_macro": 7.541401,
+        "per_lang_bpt": {
+          "en": 7.397133,
+          "zh": 7.995521,
+          "code": 7.231549
+        },
+        "source": "corpus/<lang>/<lang>.txt 整语料实测（bytes/tokens）",
+        "bpt_total_byte_weighted": 7.507831
+      },
+      "thresholds": {
+        "stable_max": 0.35,
+        "sensitive_max": 1.0
+      },
+      "source": "本机 CLI 实测（加速版 CLI，切片+整语料同口径）",
+      "corpus": {
+        "slices_dir": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain",
+        "full_corpus_dir": "E:\\tokenizer_c\\benchmark\\corpus"
+      },
+      "corpus_audit": {
+        "eval_en": {
+          "file": "eval_en.txt",
+          "path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\eval_en.txt",
+          "bytes": 2097084,
+          "lines": 22777,
+          "chars": 2097084,
+          "distinct_chars": 61,
+          "distinct_cjk_chars": 0,
+          "dup_line_count": 11286,
+          "dup_line_rate": 0.4955
+        },
+        "en_real": {
+          "file": "en_real.txt",
+          "path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\en_real.txt",
+          "bytes": 2097141,
+          "lines": 8238,
+          "chars": 2087058,
+          "distinct_chars": 274,
+          "distinct_cjk_chars": 11,
+          "dup_line_count": 0,
+          "dup_line_rate": 0.0
+        },
+        "corpus_en": {
+          "file": "en.txt",
+          "path": "E:\\tokenizer_c\\benchmark\\corpus\\en\\en.txt",
+          "bytes": 15900854,
+          "lines": 172125,
+          "chars": 15900854,
+          "distinct_chars": 61,
+          "distinct_cjk_chars": 0,
+          "dup_line_count": 88201,
+          "dup_line_rate": 0.512424
+        },
+        "eval_zh": {
+          "file": "eval_zh.txt",
+          "path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\eval_zh.txt",
+          "bytes": 2097089,
+          "lines": 15973,
+          "chars": 720327,
+          "distinct_chars": 431,
+          "distinct_cjk_chars": 427,
+          "dup_line_count": 38,
+          "dup_line_rate": 0.002379
+        },
+        "zh_real": {
+          "file": "zh_real.txt",
+          "path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\zh_real.txt",
+          "bytes": 2097024,
+          "lines": 7111,
+          "chars": 739339,
+          "distinct_chars": 4508,
+          "distinct_cjk_chars": 4113,
+          "dup_line_count": 0,
+          "dup_line_rate": 0.0
+        },
+        "corpus_zh": {
+          "file": "zh.txt",
+          "path": "E:\\tokenizer_c\\benchmark\\corpus\\zh\\zh.txt",
+          "bytes": 10566465,
+          "lines": 80694,
+          "chars": 3629747,
+          "distinct_chars": 431,
+          "distinct_cjk_chars": 427,
+          "dup_line_count": 808,
+          "dup_line_rate": 0.010013
+        },
+        "eval_code": {
+          "file": "eval_code.txt",
+          "path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\eval_code.txt",
+          "bytes": 2097122,
+          "lines": 30739,
+          "chars": 2097122,
+          "distinct_chars": 81,
+          "distinct_cjk_chars": 0,
+          "dup_line_count": 20454,
+          "dup_line_rate": 0.665409
+        },
+        "code_real": {
+          "file": "code_real.txt",
+          "path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\code_real.txt",
+          "bytes": 2097142,
+          "lines": 52739,
+          "chars": 2090366,
+          "distinct_chars": 760,
+          "distinct_cjk_chars": 533,
+          "dup_line_count": 17667,
+          "dup_line_rate": 0.334989
+        },
+        "corpus_code": {
+          "file": "code.txt",
+          "path": "E:\\tokenizer_c\\benchmark\\corpus\\code\\code.txt",
+          "bytes": 10641181,
+          "lines": 155408,
+          "chars": 10641181,
+          "distinct_chars": 81,
+          "distinct_cjk_chars": 0,
+          "dup_line_count": 105059,
+          "dup_line_rate": 0.676021
+        }
+      },
+      "label": "model_256k"
+    },
+    "qwen1.5B": {
+      "model": null,
+      "langs": [
+        "en",
+        "zh",
+        "code"
+      ],
+      "per_lang": {
+        "en": {
+          "eval": {
+            "bpt": 6.1173,
+            "tokens": null,
+            "bytes": null
+          },
+          "real": {
+            "bpt": 4.6049,
+            "tokens": null,
+            "bytes": null
+          },
+          "D": 1.328433
+        },
+        "zh": {
+          "eval": {
+            "bpt": 5.3193,
+            "tokens": null,
+            "bytes": null
+          },
+          "real": {
+            "bpt": 4.3911,
+            "tokens": null,
+            "bytes": null
+          },
+          "D": 1.211382
+        },
+        "code": {
+          "eval": {
+            "bpt": 4.064,
+            "tokens": null,
+            "bytes": null
+          },
+          "real": {
+            "bpt": 4.2522,
+            "tokens": null,
+            "bytes": null
+          },
+          "D": 0.955741
+        }
+      },
+      "D": {
+        "en": 1.328433,
+        "zh": 1.211382,
+        "code": 0.955741
+      },
+      "dispersion": {
+        "max_minus_min": 0.372692,
+        "mean": 1.165185,
+        "std": 0.155618,
+        "n": 3
+      },
+      "verdict": {
+        "level": "敏感",
+        "text": "口径敏感：评测语料会放大或缩小真实表现，跨口径数值不可直接混用（0.35 < dispersion=0.3727 ≤ 1.00）"
+      },
+      "aggregate": {
+        "bpt_total_byte_weighted": 5.152283,
+        "bpt_macro": 5.166883,
+        "per_lang_bpt": {
+          "en": 6.119573,
+          "zh": 5.310796,
+          "code": 4.07028
+        },
+        "source": "benchmark/qwen_1.5B_eval.json totals 与 langs（整语料）"
+      },
+      "thresholds": {
+        "stable_max": 0.35,
+        "sensitive_max": 1.0
+      },
+      "label": "qwen1.5B",
+      "source": "indomain_results2.json 折算（厂商基线未重跑）"
+    },
+    "grok": {
+      "model": null,
+      "langs": [
+        "en",
+        "zh",
+        "code"
+      ],
+      "per_lang": {
+        "en": {
+          "eval": {
+            "bpt": 6.1179,
+            "tokens": null,
+            "bytes": null
+          },
+          "real": {
+            "bpt": 4.6657,
+            "tokens": null,
+            "bytes": null
+          },
+          "D": 1.31125
+        },
+        "zh": {
+          "eval": {
+            "bpt": 4.1304,
+            "tokens": null,
+            "bytes": null
+          },
+          "real": {
+            "bpt": 3.6904,
+            "tokens": null,
+            "bytes": null
+          },
+          "D": 1.119228
+        },
+        "code": {
+          "eval": {
+            "bpt": 4.0704,
+            "tokens": null,
+            "bytes": null
+          },
+          "real": {
+            "bpt": 4.2061,
+            "tokens": null,
+            "bytes": null
+          },
+          "D": 0.967737
+        }
+      },
+      "D": {
+        "en": 1.31125,
+        "zh": 1.119228,
+        "code": 0.967737
+      },
+      "dispersion": {
+        "max_minus_min": 0.343513,
+        "mean": 1.132738,
+        "std": 0.140564,
+        "n": 3
+      },
+      "verdict": {
+        "level": "稳定",
+        "text": "口径稳定：评测语料与真实语料结论一致（dispersion=0.3435 ≤ 0.35）"
+      },
+      "aggregate": {
+        "bpt_total_byte_weighted": 4.77657,
+        "bpt_macro": 4.774525,
+        "per_lang_bpt": {
+          "en": 6.120164,
+          "zh": 4.126819,
+          "code": 4.076592
+        },
+        "source": "benchmark/grok_eval.json totals 与 langs（整语料）"
+      },
+      "thresholds": {
+        "stable_max": 0.35,
+        "sensitive_max": 1.0
+      },
+      "label": "grok",
+      "source": "indomain_results2.json 折算（厂商基线未重跑）"
+    },
+    "doubao": {
+      "model": null,
+      "langs": [
+        "en",
+        "zh",
+        "code"
+      ],
+      "per_lang": {
+        "en": {
+          "eval": {
+            "bpt": 5.7195,
+            "tokens": null,
+            "bytes": null
+          },
+          "real": {
+            "bpt": 4.5132,
+            "tokens": null,
+            "bytes": null
+          },
+          "D": 1.267283
+        },
+        "zh": {
+          "eval": {
+            "bpt": 5.1709,
+            "tokens": null,
+            "bytes": null
+          },
+          "real": {
+            "bpt": 4.3739,
+            "tokens": null,
+            "bytes": null
+          },
+          "D": 1.182217
+        },
+        "code": {
+          "eval": {
+            "bpt": 3.8447,
+            "tokens": null,
+            "bytes": null
+          },
+          "real": {
+            "bpt": 3.7229,
+            "tokens": null,
+            "bytes": null
+          },
+          "D": 1.032716
+        }
+      },
+      "D": {
+        "en": 1.267283,
+        "zh": 1.182217,
+        "code": 1.032716
+      },
+      "dispersion": {
+        "max_minus_min": 0.234567,
+        "mean": 1.160739,
+        "std": 0.096958,
+        "n": 3
+      },
+      "verdict": {
+        "level": "稳定",
+        "text": "口径稳定：评测语料与真实语料结论一致（dispersion=0.2346 ≤ 0.35）"
+      },
+      "aggregate": {
+        "bpt_total_byte_weighted": 4.897302,
+        "bpt_macro": 4.917515,
+        "per_lang_bpt": {
+          "en": 5.722752,
+          "zh": 5.163913,
+          "code": 3.865879
+        },
+        "source": "benchmark/doubao_eval.json totals 与 langs（整语料）"
+      },
+      "thresholds": {
+        "stable_max": 0.35,
+        "sensitive_max": 1.0
+      },
+      "label": "doubao",
+      "source": "indomain_results2.json 折算（厂商基线未重跑）"
+    },
+    "gpt6": {
+      "model": null,
+      "langs": [
+        "en",
+        "zh",
+        "code"
+      ],
+      "per_lang": {
+        "en": {
+          "eval": {
+            "bpt": 6.1187,
+            "tokens": null,
+            "bytes": null
+          },
+          "real": {
+            "bpt": 4.7703,
+            "tokens": null,
+            "bytes": null
+          },
+          "D": 1.282666
+        },
+        "zh": {
+          "eval": {
+            "bpt": 4.3601,
+            "tokens": null,
+            "bytes": null
+          },
+          "real": {
+            "bpt": 3.6959,
+            "tokens": null,
+            "bytes": null
+          },
+          "D": 1.179713
+        },
+        "code": {
+          "eval": {
+            "bpt": 4.2548,
+            "tokens": null,
+            "bytes": null
+          },
+          "real": {
+            "bpt": 4.2447,
+            "tokens": null,
+            "bytes": null
+          },
+          "D": 1.002379
+        }
+      },
+      "D": {
+        "en": 1.282666,
+        "zh": 1.179713,
+        "code": 1.002379
+      },
+      "dispersion": {
+        "max_minus_min": 0.280287,
+        "mean": 1.154919,
+        "std": 0.115762,
+        "n": 3
+      },
+      "verdict": {
+        "level": "稳定",
+        "text": "口径稳定：评测语料与真实语料结论一致（dispersion=0.2803 ≤ 0.35）"
+      },
+      "aggregate": {
+        "bpt_total_byte_weighted": 4.933482,
+        "bpt_macro": 4.912169,
+        "per_lang_bpt": {
+          "en": 6.1211,
+          "zh": 4.357665,
+          "code": 4.257743
+        },
+        "source": "benchmark/gpt6_eval.json totals 与 langs（整语料）"
+      },
+      "thresholds": {
+        "stable_max": 0.35,
+        "sensitive_max": 1.0
+      },
+      "label": "gpt6",
+      "source": "indomain_results2.json 折算（厂商基线未重跑）"
+    },
+    "hunyuan": {
+      "model": null,
+      "langs": [
+        "en",
+        "zh",
+        "code"
+      ],
+      "per_lang": {
+        "en": {
+          "eval": {
+            "bpt": 6.1173,
+            "tokens": null,
+            "bytes": null
+          },
+          "real": {
+            "bpt": 4.6039,
+            "tokens": null,
+            "bytes": null
+          },
+          "D": 1.328721
+        },
+        "zh": {
+          "eval": {
+            "bpt": 5.4991,
+            "tokens": null,
+            "bytes": null
+          },
+          "real": {
+            "bpt": 4.5382,
+            "tokens": null,
+            "bytes": null
+          },
+          "D": 1.211736
+        },
+        "code": {
+          "eval": {
+            "bpt": 4.0642,
+            "tokens": null,
+            "bytes": null
+          },
+          "real": {
+            "bpt": 4.2509,
+            "tokens": null,
+            "bytes": null
+          },
+          "D": 0.95608
+        }
+      },
+      "D": {
+        "en": 1.328721,
+        "zh": 1.211736,
+        "code": 0.95608
+      },
+      "dispersion": {
+        "max_minus_min": 0.372641,
+        "mean": 1.165512,
+        "std": 0.155602,
+        "n": 3
+      },
+      "verdict": {
+        "level": "敏感",
+        "text": "口径敏感：评测语料会放大或缩小真实表现，跨口径数值不可直接混用（0.35 < dispersion=0.3726 ≤ 1.00）"
+      },
+      "aggregate": {
+        "bpt_total_byte_weighted": 5.199,
+        "bpt_macro": 5.226349,
+        "per_lang_bpt": {
+          "en": 6.119573,
+          "zh": 5.488999,
+          "code": 4.070475
+        },
+        "source": "benchmark/hunyuan_eval.json totals 与 langs（整语料）"
+      },
+      "thresholds": {
+        "stable_max": 0.35,
+        "sensitive_max": 1.0
+      },
+      "label": "hunyuan",
+      "source": "indomain_results2.json 折算（厂商基线未重跑）"
+    }
+  },
+  "notes": [
+    "项目侧 3 个模型（model_big2 / model_big / model_256k）用本机加速版 CLI 实测，切片与整语料同口径；加速版 CLI 与原版 build/tok-cli.exe 输出逐字节一致。",
+    "厂商侧 5 家（qwen1.5B / grok / doubao / gpt6 / hunyuan）不重跑，D 与 dispersion 直接由 metrics/indomain_results2.json 的 vendor eval_*/real_* 折算；聚合口径取自 benchmark/<name>_eval.json 的 totals。",
+    "D 越高表示「评测语料低估压缩效率」（同一文本在评测语料上 token 更多）或「真实语料更易压缩」；dispersion 越大说明结论越依赖语料口径。",
+    "protocol_audit 中 corpus_* 为完整评测语料（模板合成），eval_* 为同口径切片，*_real 为真实域内切片。"
+  ],
+  "data_quality_findings": [
+    "评测语料重复行率高（模板合成痕迹）：eval_en=49.5%、eval_code=66.5%，整语料 corpus_en=51.2%、corpus_code=67.6%；而真实切片 en_real=0.0%、code_real=33.5%。",
+    "中文评测语料字符多样性极低：eval_zh 不同字符 431（不同汉字 427），真实中文切片 zh_real 达 4508（不同汉字 4113）；二者比 10 倍。即评测语料的「协议」覆盖度远低于真实域。",
+    "含义：D 稳定只说明「评测口径与真实口径的结论方向一致」，不代表评测语料真实；上述重复行率/字符多样性缺口会同时压低评测与真实两侧的 BPT，需与 protocol_audit 并读，不能单独用 D 或 bpt_total 评价 tokenizer。"
+  ]
+}

@@ -1,0 +1,114 @@
+{
+ "model": "E:\\tokenizer_c\\model_big2.tkm",
+ "cli": "E:\\tokenizer_c\\benchmark\\eval_2026-10-14_model_big2_fix\\bin\\tok-cli-fix.exe",
+ "corpus": {
+  "real": {
+   "en": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\en_real.txt",
+   "zh": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\zh_real.txt",
+   "code": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\code_real.txt"
+  },
+  "eval": {
+   "en": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\eval_en.txt",
+   "zh": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\eval_zh.txt",
+   "code": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\eval_code.txt"
+  }
+ },
+ "note": "real_* 为真实域 held-out 切片；均为 bytes/token（越高压缩越好）",
+ "configs": {
+  "noflags": {
+   "cli_extra": [],
+   "real": {
+    "en": {
+     "tokens": 459915,
+     "bytes": 2097141,
+     "bpt": 4.559845,
+     "roundtrip_ok": false,
+     "roundtrip_mismatch": 200,
+     "roundtrip_lines": 200
+    },
+    "zh": {
+     "tokens": 883092,
+     "bytes": 2097024,
+     "bpt": 2.374638,
+     "roundtrip_ok": false,
+     "roundtrip_mismatch": 200,
+     "roundtrip_lines": 200
+    },
+    "code": {
+     "tokens": 620523,
+     "bytes": 2097142,
+     "bpt": 3.379636,
+     "roundtrip_ok": false,
+     "roundtrip_mismatch": 200,
+     "roundtrip_lines": 200
+    }
+   },
+   "eval": {
+    "en": {
+     "tokens": 456917,
+     "bytes": 2097084,
+     "bpt": 4.589639
+    },
+    "zh": {
+     "tokens": 843849,
+     "bytes": 2097089,
+     "bpt": 2.485147
+    },
+    "code": {
+     "tokens": 511384,
+     "bytes": 2097122,
+     "bpt": 4.100875
+    }
+   }
+  },
+  "withflags": {
+   "cli_extra": [
+    "--norm-reversible",
+    "--segment-rules"
+   ],
+   "real": {
+    "en": {
+     "tokens": 470513,
+     "bytes": 2097141,
+     "bpt": 4.457137,
+     "roundtrip_ok": false,
+     "roundtrip_mismatch": 200,
+     "roundtrip_lines": 200
+    },
+    "zh": {
+     "tokens": 976064,
+     "bytes": 2097024,
+     "bpt": 2.148449,
+     "roundtrip_ok": false,
+     "roundtrip_mismatch": 200,
+     "roundtrip_lines": 200
+    },
+    "code": {
+     "tokens": 662613,
+     "bytes": 2097142,
+     "bpt": 3.164958,
+     "roundtrip_ok": false,
+     "roundtrip_mismatch": 200,
+     "roundtrip_lines": 200
+    }
+   },
+   "eval": {
+    "en": {
+     "tokens": 463718,
+     "bytes": 2097084,
+     "bpt": 4.522326
+    },
+    "zh": {
+     "tokens": 873036,
+     "bytes": 2097089,
+     "bpt": 2.402065
+    },
+    "code": {
+     "tokens": 527388,
+     "bytes": 2097122,
+     "bpt": 3.976431
+    }
+   }
+  }
+ }
+}

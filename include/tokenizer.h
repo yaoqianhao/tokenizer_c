@@ -101,6 +101,29 @@ void tokenizer_set_normalizer_hook(tokenizer_t *tok,
                                    void *userdata);
 
 /* ------------------------------------------------------------------ */
+/* Runtime inference-flag overrides (P0-1 / P1-4 / P1-6)               */
+/* ------------------------------------------------------------------ */
+
+/* Override the encode-time flags that a model file carries in its header.
+ * These setters exist so that already-trained models can be re-evaluated with
+ * a fixed encoder without retraining. They only affect encode(), never the
+ * piece table, so decode() stays byte-exact either way.
+ *
+ *   tokenizer_set_norm_reversible(tok, 1):
+ *       switch the encoder to lossless (NFC-only) normalization, i.e. stop
+ *       folding full-width / compatibility forms (U+FF0C -> U+002C). Fixes the
+ *       encode->decode round-trip failures. 0 = legacy full NFKC.
+ *   tokenizer_set_segment_rules(tok, 1):
+ *       enable the deterministic digit 3-grouping + operator isolation rules.
+ *   tokenizer_set_byte_real(tok, 1):
+ *       emit the real "<0xXX>" piece id on the byte-fallback path when the
+ *       vocabulary contains one (models trained before P1-4 do not, so this is
+ *       a no-op for them and needs a retrain to matter). */
+void tokenizer_set_norm_reversible(tokenizer_t *tok, int enable);
+void tokenizer_set_segment_rules(tokenizer_t *tok, int enable);
+void tokenizer_set_byte_real(tokenizer_t *tok, int enable);
+
+/* ------------------------------------------------------------------ */
 /* Training                                                            */
 /* ------------------------------------------------------------------ */
 

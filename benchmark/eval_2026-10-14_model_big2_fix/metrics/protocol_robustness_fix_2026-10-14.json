@@ -1,0 +1,181 @@
+{
+ "model": "E:\\tokenizer_c\\model_big2.tkm",
+ "cli": "E:\\tokenizer_c\\benchmark\\eval_2026-10-14_model_big2_fix\\bin\\tok-cli-fix.exe",
+ "slices_dir": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain",
+ "full_corpus_dir": "E:\\tokenizer_c\\benchmark\\corpus",
+ "configs": {
+  "noflags": {
+   "model": "E:\\tokenizer_c\\model_big2.tkm",
+   "langs": [
+    "en",
+    "zh",
+    "code"
+   ],
+   "per_lang": {
+    "en": {
+     "eval_path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\eval_en.txt",
+     "real_path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\en_real.txt",
+     "eval": {
+      "bytes": 2097084,
+      "tokens": 456917,
+      "bpt": 4.589639
+     },
+     "real": {
+      "bytes": 2097141,
+      "tokens": 459915,
+      "bpt": 4.559845
+     },
+     "D": 1.006534
+    },
+    "zh": {
+     "eval_path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\eval_zh.txt",
+     "real_path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\zh_real.txt",
+     "eval": {
+      "bytes": 2097089,
+      "tokens": 843849,
+      "bpt": 2.485147
+     },
+     "real": {
+      "bytes": 2097024,
+      "tokens": 883092,
+      "bpt": 2.374638
+     },
+     "D": 1.046537
+    },
+    "code": {
+     "eval_path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\eval_code.txt",
+     "real_path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\code_real.txt",
+     "eval": {
+      "bytes": 2097122,
+      "tokens": 511384,
+      "bpt": 4.100875
+     },
+     "real": {
+      "bytes": 2097142,
+      "tokens": 620523,
+      "bpt": 3.379636
+     },
+     "D": 1.213407
+    }
+   },
+   "D": {
+    "en": 1.006534,
+    "zh": 1.046537,
+    "code": 1.213407
+   },
+   "dispersion": {
+    "max_minus_min": 0.206873,
+    "mean": 1.088826,
+    "std": 0.089593,
+    "n": 3
+   },
+   "verdict": {
+    "level": "稳定",
+    "text": "口径稳定：评测语料与真实语料结论一致（dispersion=0.2069 ≤ 0.35）"
+   },
+   "aggregate": {
+    "bpt_macro": 3.727148,
+    "per_lang_bpt": {
+     "en": 4.588941,
+     "zh": 2.482838,
+     "code": 4.109665
+    },
+    "source": "corpus/<lang>/<lang>.txt 整语料实测（bytes/tokens）",
+    "bpt_total_byte_weighted": 3.599222
+   },
+   "thresholds": {
+    "stable_max": 0.35,
+    "sensitive_max": 1.0
+   },
+   "cli_extra": []
+  },
+  "withflags": {
+   "model": "E:\\tokenizer_c\\model_big2.tkm",
+   "langs": [
+    "en",
+    "zh",
+    "code"
+   ],
+   "per_lang": {
+    "en": {
+     "eval_path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\eval_en.txt",
+     "real_path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\en_real.txt",
+     "eval": {
+      "bytes": 2097084,
+      "tokens": 463718,
+      "bpt": 4.522326
+     },
+     "real": {
+      "bytes": 2097141,
+      "tokens": 470513,
+      "bpt": 4.457137
+     },
+     "D": 1.014626
+    },
+    "zh": {
+     "eval_path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\eval_zh.txt",
+     "real_path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\zh_real.txt",
+     "eval": {
+      "bytes": 2097089,
+      "tokens": 873036,
+      "bpt": 2.402065
+     },
+     "real": {
+      "bytes": 2097024,
+      "tokens": 976064,
+      "bpt": 2.148449
+     },
+     "D": 1.118046
+    },
+    "code": {
+     "eval_path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\eval_code.txt",
+     "real_path": "C:\\Users\\Nero\\AppData\\Roaming\\Tencent\\Marvis\\User\\oAN1i2dpCCuZq-FgvYnflZ6SBnQA\\workspace\\conv_dbd7c0fe35e3451ba9e8b1bc07331f46\\temp\\indomain\\code_real.txt",
+     "eval": {
+      "bytes": 2097122,
+      "tokens": 527388,
+      "bpt": 3.976431
+     },
+     "real": {
+      "bytes": 2097142,
+      "tokens": 662613,
+      "bpt": 3.164958
+     },
+     "D": 1.256393
+    }
+   },
+   "D": {
+    "en": 1.014626,
+    "zh": 1.118046,
+    "code": 1.256393
+   },
+   "dispersion": {
+    "max_minus_min": 0.241767,
+    "mean": 1.129688,
+    "std": 0.099044,
+    "n": 3
+   },
+   "verdict": {
+    "level": "稳定",
+    "text": "口径稳定：评测语料与真实语料结论一致（dispersion=0.2418 ≤ 0.35）"
+   },
+   "aggregate": {
+    "bpt_macro": 3.636089,
+    "per_lang_bpt": {
+     "en": 4.522144,
+     "zh": 2.400322,
+     "code": 3.985801
+    },
+    "source": "corpus/<lang>/<lang>.txt 整语料实测（bytes/tokens）",
+    "bpt_total_byte_weighted": 3.504738
+   },
+   "thresholds": {
+    "stable_max": 0.35,
+    "sensitive_max": 1.0
+   },
+   "cli_extra": [
+    "--norm-reversible",
+    "--segment-rules"
+   ]
+  }
+ }
+}

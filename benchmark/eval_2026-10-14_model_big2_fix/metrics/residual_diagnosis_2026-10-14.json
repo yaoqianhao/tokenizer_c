@@ -1,0 +1,86 @@
+{
+ "residual_zh_failures": [
+  {
+   "line_idx": 45,
+   "len_in": 456,
+   "len_out": 454,
+   "byte_pos": 9,
+   "in_char": "�",
+   "in_cp": "U+FFFD",
+   "in_nfkc": "�",
+   "out_snippet": "网讯 2月15日�",
+   "in_snippet": "网讯　2月15日",
+   "contains_byte_fallback": 78
+  },
+  {
+   "line_idx": 166,
+   "len_in": 825,
+   "len_out": 819,
+   "byte_pos": 164,
+   "in_char": "�",
+   "in_cp": "U+FFFD",
+   "in_nfkc": "�",
+   "out_snippet": "响。 2.配电箱",
+   "in_snippet": "响。　2.配电�",
+   "contains_byte_fallback": 207
+  },
+  {
+   "line_idx": 167,
+   "len_in": 116,
+   "len_out": 114,
+   "byte_pos": 43,
+   "in_char": "�",
+   "in_cp": "U+FFFD",
+   "in_nfkc": "�",
+   "out_snippet": "��养? 升降机�",
+   "in_snippet": "��养?　升降机",
+   "contains_byte_fallback": 21
+  }
+ ],
+ "trailing_newline_probe": {
+  "noflags": {
+   "with_nl": {
+    "in": "abc\n",
+    "out": "abc ",
+    "eq": false
+   },
+   "no_nl": {
+    "in": "abc",
+    "out": "abc",
+    "eq": true
+   },
+   "zh_with_nl": {
+    "in": "好，吗\n",
+    "out": "好,吗 ",
+    "eq": false
+   },
+   "zh_no_nl": {
+    "in": "好，吗",
+    "out": "好,吗",
+    "eq": false
+   }
+  },
+  "withflags": {
+   "with_nl": {
+    "in": "abc\n",
+    "out": "abc ",
+    "eq": false
+   },
+   "no_nl": {
+    "in": "abc",
+    "out": "abc",
+    "eq": true
+   },
+   "zh_with_nl": {
+    "in": "好，吗\n",
+    "out": "好，吗 ",
+    "eq": false
+   },
+   "zh_no_nl": {
+    "in": "好，吗",
+    "out": "好，吗",
+    "eq": true
+   }
+  }
+ }
+}
