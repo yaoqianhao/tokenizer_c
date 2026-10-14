@@ -22,9 +22,16 @@ extern "C" {
 char *normalize_text(const char *text, size_t len,
                      int mark_spaces, int fold_case, size_t *out_len);
 
-/* Normalization modes (P0-1 reversible normalization). */
+/* Normalization modes (P0-1 reversible normalization, extended 2026-10-14
+ * with a strict NFC mode). Values are stable: tokenizer.h mirrors them as
+ * TOKENIZER_NORM_MODE_* and the CLI maps --norm=nfkc|nfc|reversible onto
+ * them. */
 #define NORM_MODE_LEGACY_NFKC 0 /* full NFKC: compatibility folding (lossy)   */
 #define NORM_MODE_REVERSIBLE  1 /* canonical composition only (lossless)     */
+#define NORM_MODE_NFC         2 /* strict NFC: canonical decomposition +
+                                 * canonical ordering + canonical
+                                 * composition; never applies compatibility
+                                 * folding (U+FF0C stays U+FF0C) */
 
 /*
  * Mode-aware variant used by the encode path.

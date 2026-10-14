@@ -1,0 +1,241 @@
+{
+  "date": "2026-10-14",
+  "title": "协议鲁棒性指标报告 — model_big2/nfc",
+  "notes": [
+    "D_lang = BPT_eval / BPT_real（BPT = bytes/tokens，tokens 由 CLI 实测）。",
+    "dispersion = max(D) - min(D)，并附三语种总体标准差；阈值 ≤0.35 稳定 / 0.35–1.0 敏感 / >1.0 口径依赖。",
+    "真实语料为 scripts/indomain_compare.py、indomain_compare2.py 所用同一语料来源，本次未引入新语料。"
+  ],
+  "corpus": {
+    "slices_dir": "E:\\tokenizer_c\\benchmark\\eval_2026-10-14_model_big2_norm_compare\\corpus_slices",
+    "full_corpus_dir": "E:\\tokenizer_c\\benchmark\\corpus",
+    "protocol_audit": {
+      "eval_en": {
+        "file": "eval_en.txt",
+        "path": "E:\\tokenizer_c\\benchmark\\eval_2026-10-14_model_big2_norm_compare\\corpus_slices\\eval_en.txt",
+        "bytes": 2097084,
+        "lines": 22777,
+        "chars": 2097084,
+        "distinct_chars": 61,
+        "distinct_cjk_chars": 0,
+        "dup_line_count": 11286,
+        "dup_line_rate": 0.4955
+      },
+      "eval_zh": {
+        "file": "eval_zh.txt",
+        "path": "E:\\tokenizer_c\\benchmark\\eval_2026-10-14_model_big2_norm_compare\\corpus_slices\\eval_zh.txt",
+        "bytes": 2097089,
+        "lines": 15973,
+        "chars": 720327,
+        "distinct_chars": 431,
+        "distinct_cjk_chars": 427,
+        "dup_line_count": 38,
+        "dup_line_rate": 0.002379
+      },
+      "eval_code": {
+        "file": "eval_code.txt",
+        "path": "E:\\tokenizer_c\\benchmark\\eval_2026-10-14_model_big2_norm_compare\\corpus_slices\\eval_code.txt",
+        "bytes": 2097122,
+        "lines": 30739,
+        "chars": 2097122,
+        "distinct_chars": 81,
+        "distinct_cjk_chars": 0,
+        "dup_line_count": 20454,
+        "dup_line_rate": 0.665409
+      },
+      "en_real": {
+        "file": "en_real.txt",
+        "path": "E:\\tokenizer_c\\benchmark\\eval_2026-10-14_model_big2_norm_compare\\corpus_slices\\en_real.txt",
+        "bytes": 2097141,
+        "lines": 8238,
+        "chars": 2087058,
+        "distinct_chars": 274,
+        "distinct_cjk_chars": 11,
+        "dup_line_count": 0,
+        "dup_line_rate": 0.0
+      },
+      "zh_real": {
+        "file": "zh_real.txt",
+        "path": "E:\\tokenizer_c\\benchmark\\eval_2026-10-14_model_big2_norm_compare\\corpus_slices\\zh_real.txt",
+        "bytes": 2097024,
+        "lines": 7111,
+        "chars": 739339,
+        "distinct_chars": 4508,
+        "distinct_cjk_chars": 4113,
+        "dup_line_count": 0,
+        "dup_line_rate": 0.0
+      },
+      "code_real": {
+        "file": "code_real.txt",
+        "path": "E:\\tokenizer_c\\benchmark\\eval_2026-10-14_model_big2_norm_compare\\corpus_slices\\code_real.txt",
+        "bytes": 2097142,
+        "lines": 52739,
+        "chars": 2090366,
+        "distinct_chars": 760,
+        "distinct_cjk_chars": 533,
+        "dup_line_count": 17667,
+        "dup_line_rate": 0.334989
+      }
+    }
+  },
+  "models": {
+    "model_big2/nfc": {
+      "model": "E:\\tokenizer_c\\model_big2.tkm",
+      "langs": [
+        "en",
+        "zh",
+        "code"
+      ],
+      "per_lang": {
+        "en": {
+          "eval_path": "E:\\tokenizer_c\\benchmark\\eval_2026-10-14_model_big2_norm_compare\\corpus_slices\\eval_en.txt",
+          "real_path": "E:\\tokenizer_c\\benchmark\\eval_2026-10-14_model_big2_norm_compare\\corpus_slices\\en_real.txt",
+          "eval": {
+            "bytes": 2097084,
+            "tokens": 456917,
+            "bpt": 4.589639
+          },
+          "real": {
+            "bytes": 2097141,
+            "tokens": 460515,
+            "bpt": 4.553904
+          },
+          "D": 1.007847
+        },
+        "zh": {
+          "eval_path": "E:\\tokenizer_c\\benchmark\\eval_2026-10-14_model_big2_norm_compare\\corpus_slices\\eval_zh.txt",
+          "real_path": "E:\\tokenizer_c\\benchmark\\eval_2026-10-14_model_big2_norm_compare\\corpus_slices\\zh_real.txt",
+          "eval": {
+            "bytes": 2097089,
+            "tokens": 873036,
+            "bpt": 2.402065
+          },
+          "real": {
+            "bytes": 2097024,
+            "tokens": 972071,
+            "bpt": 2.157275
+          },
+          "D": 1.113472
+        },
+        "code": {
+          "eval_path": "E:\\tokenizer_c\\benchmark\\eval_2026-10-14_model_big2_norm_compare\\corpus_slices\\eval_code.txt",
+          "real_path": "E:\\tokenizer_c\\benchmark\\eval_2026-10-14_model_big2_norm_compare\\corpus_slices\\code_real.txt",
+          "eval": {
+            "bytes": 2097122,
+            "tokens": 511384,
+            "bpt": 4.100875
+          },
+          "real": {
+            "bytes": 2097142,
+            "tokens": 620851,
+            "bpt": 3.377851
+          },
+          "D": 1.214049
+        }
+      },
+      "D": {
+        "en": 1.007847,
+        "zh": 1.113472,
+        "code": 1.214049
+      },
+      "dispersion": {
+        "max_minus_min": 0.206202,
+        "mean": 1.111789,
+        "std": 0.08419,
+        "n": 3
+      },
+      "verdict": {
+        "level": "稳定",
+        "text": "口径稳定：评测语料与真实语料结论一致（dispersion=0.2062 ≤ 0.35）"
+      },
+      "aggregate": {
+        "bpt_macro": 3.699643,
+        "per_lang_bpt": {
+          "en": 4.588941,
+          "zh": 2.400322,
+          "code": 4.109665
+        },
+        "source": "corpus/<lang>/<lang>.txt 整语料实测（bytes/tokens）",
+        "bpt_total_byte_weighted": 3.548863
+      },
+      "thresholds": {
+        "stable_max": 0.35,
+        "sensitive_max": 1.0
+      },
+      "label": "model_big2/nfc",
+      "corpus_audit": {
+        "eval_en": {
+          "file": "eval_en.txt",
+          "path": "E:\\tokenizer_c\\benchmark\\eval_2026-10-14_model_big2_norm_compare\\corpus_slices\\eval_en.txt",
+          "bytes": 2097084,
+          "lines": 22777,
+          "chars": 2097084,
+          "distinct_chars": 61,
+          "distinct_cjk_chars": 0,
+          "dup_line_count": 11286,
+          "dup_line_rate": 0.4955
+        },
+        "eval_zh": {
+          "file": "eval_zh.txt",
+          "path": "E:\\tokenizer_c\\benchmark\\eval_2026-10-14_model_big2_norm_compare\\corpus_slices\\eval_zh.txt",
+          "bytes": 2097089,
+          "lines": 15973,
+          "chars": 720327,
+          "distinct_chars": 431,
+          "distinct_cjk_chars": 427,
+          "dup_line_count": 38,
+          "dup_line_rate": 0.002379
+        },
+        "eval_code": {
+          "file": "eval_code.txt",
+          "path": "E:\\tokenizer_c\\benchmark\\eval_2026-10-14_model_big2_norm_compare\\corpus_slices\\eval_code.txt",
+          "bytes": 2097122,
+          "lines": 30739,
+          "chars": 2097122,
+          "distinct_chars": 81,
+          "distinct_cjk_chars": 0,
+          "dup_line_count": 20454,
+          "dup_line_rate": 0.665409
+        },
+        "en_real": {
+          "file": "en_real.txt",
+          "path": "E:\\tokenizer_c\\benchmark\\eval_2026-10-14_model_big2_norm_compare\\corpus_slices\\en_real.txt",
+          "bytes": 2097141,
+          "lines": 8238,
+          "chars": 2087058,
+          "distinct_chars": 274,
+          "distinct_cjk_chars": 11,
+          "dup_line_count": 0,
+          "dup_line_rate": 0.0
+        },
+        "zh_real": {
+          "file": "zh_real.txt",
+          "path": "E:\\tokenizer_c\\benchmark\\eval_2026-10-14_model_big2_norm_compare\\corpus_slices\\zh_real.txt",
+          "bytes": 2097024,
+          "lines": 7111,
+          "chars": 739339,
+          "distinct_chars": 4508,
+          "distinct_cjk_chars": 4113,
+          "dup_line_count": 0,
+          "dup_line_rate": 0.0
+        },
+        "code_real": {
+          "file": "code_real.txt",
+          "path": "E:\\tokenizer_c\\benchmark\\eval_2026-10-14_model_big2_norm_compare\\corpus_slices\\code_real.txt",
+          "bytes": 2097142,
+          "lines": 52739,
+          "chars": 2090366,
+          "distinct_chars": 760,
+          "distinct_cjk_chars": 533,
+          "dup_line_count": 17667,
+          "dup_line_rate": 0.334989
+        }
+      },
+      "corpus": {
+        "slices_dir": "E:\\tokenizer_c\\benchmark\\eval_2026-10-14_model_big2_norm_compare\\corpus_slices",
+        "full_corpus_dir": "E:\\tokenizer_c\\benchmark\\corpus"
+      },
+      "source": "本机 CLI 实测（加速版 CLI，输出与 build/tok-cli.exe 逐字节一致）"
+    }
+  }
+}

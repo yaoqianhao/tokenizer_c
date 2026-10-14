@@ -119,6 +119,22 @@ void tokenizer_set_normalizer_hook(tokenizer_t *tok,
  *       emit the real "<0xXX>" piece id on the byte-fallback path when the
  *       vocabulary contains one (models trained before P1-4 do not, so this is
  *       a no-op for them and needs a retrain to matter). */
+/* Switchable encode-time normalization modes (2026-10-14). The numeric values
+ * are stable, mirrored by the internal NORM_MODE_* constants and by the CLI
+ * --norm=nfkc|nfc|reversible values. */
+#define TOKENIZER_NORM_MODE_NFKC       0 /* full NFKC (legacy default, lossy) */
+#define TOKENIZER_NORM_MODE_REVERSIBLE 1 /* lossless canonical composition    */
+#define TOKENIZER_NORM_MODE_NFC        2 /* strict NFC (UAX #15)              */
+
+/* Unified normalization-mode switch driving encode(). NFC mode performs
+ * canonical decomposition / ordering / composition only (no compatibility
+ * folding), so full-width punctuation such as U+FF0C survives unchanged; the
+ * original NFKC path remains available as TOKENIZER_NORM_MODE_NFKC and stays
+ * the default when this setter is never called. Returns 0 on success, -1 for
+ * an invalid mode or a NULL tokenizer.
+ * Note: it only affects encode(); decode is byte-exact in every mode. */
+int tokenizer_set_norm_mode(tokenizer_t *tok, int mode);
+
 void tokenizer_set_norm_reversible(tokenizer_t *tok, int enable);
 void tokenizer_set_segment_rules(tokenizer_t *tok, int enable);
 void tokenizer_set_byte_real(tokenizer_t *tok, int enable);

@@ -402,6 +402,110 @@ int main(void) {
         }
     }
 
+    /* ---- 12. switchable normalization modes: NFKC / NFC / reversible ----
+     * NFC performs canonical decomposition + canonical ordering + canonical
+     * composition (U+212B -> U+00C5, e+U+0301 -> U+00E9) but never applies
+     * compatibility folding -- that is what separates it from NFKC.
+     * Reversible only composes, so precomposed forms are left alone and
+     * zero-width characters survive. */
+    {
+        static const struct {
+            const char *in;   /* UTF-8 input */
+            const char *nfkc; /* expected decode() in NFKC mode */
+            const char *nfc;  /* expected decode() in NFC mode */
+            const char *rev;  /* expected decode() in reversible mode */
+        } cases[] = {
+            /* full-width ascii: NFKC folds it, NFC/reversible keep it */
+            { "\xEF\xBC\xA1\xEF\xBC\xA2\xEF\xBC\xA3", "ABC",
+              "\xEF\xBC\xA1\xEF\xBC\xA2\xEF\xBC\xA3",
+              "\xEF\xBC\xA1\xEF\xBC\xA2\xEF\xBC\xA3" },
+            /* U+FF0C full-width comma: the historical round-trip culprit */
+            { "\xEF\xBC\x8C", ",", "\xEF\xBC\x8C", "\xEF\xBC\x8C" },
+            /* U+2460 circled one: compatibility mapping, so NFC keeps it */
+            { "\xE2\x91\xA0", "1", "\xE2\x91\xA0", "\xE2\x91\xA0" },
+            /* halfwidth katakana KA + voiced mark: NFKC -> full-width GA */
+            { "\xEF\xBD\xB6\xEF\xBE\x9E", "\xE3\x82\xAC",
+              "\xEF\xBD\xB6\xEF\xBE\x9E", "\xEF\xBD\xB6\xEF\xBE\x9E" },
+            /* e + U+0301: composition happens in every mode (NFC proof) */
+            { "e\xCC\x81", "\xC3\xA9", "\xC3\xA9", "\xC3\xA9" },
+            /* U+212B ANGSTROM SIGN: canonical singleton, so NFC yields U+00C5
+             * while reversible leaves the original code point untouched */
+            { "\xE2\x84\xAB", "\xC3\x85", "\xC3\x85", "\xE2\x84\xAB" },
+            /* U+200B zero width space: NFKC/NFC strip it, reversible keeps it */
+            { "a\xE2\x80\x8B" "b", "ab", "ab", "a\xE2\x80\x8B" "b" },
+        };
+        static const int modes[] = { TOKENIZER_NORM_MODE_NFKC,
+                                     TOKENIZER_NORM_MODE_NFC,
+                                     TOKENIZER_NORM_MODE_REVERSIBLE };
+        static const char *mode_names[] = { "nfkc", "nfc", "reversible" };
+
+        CHECK(tokenizer_set_norm_mode(tok, 99) == -1,
+              "set_norm_mode rejects an unknown mode");
+        for (int mi = 0; mi < 3; mi++) {
+            CHECK(tokenizer_set_norm_mode(tok, modes[mi]) == 0,
+                  "set_norm_mode accepts nfkc/nfc/reversible");
+        }
+
+        for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+            const char *want[3] = { cases[i].nfkc, cases[i].nfc, cases[i].rev };
+            for (int mi = 0; mi < 3; mi++) {
+                CHECK(tokenizer_set_norm_mode(tok, modes[mi]) == 0,
+                      "apply normalization mode");
+                int *ids = NULL;
+                size_t n = 0;
+                CHECK(tokenizer_encode(tok, cases[i].in, strlen(cases[i].in),
+                                       &ids, &n) == 0,
+                      "encode under switchable norm mode");
+                char *out = NULL;
+                size_t on = 0;
+                CHECK(ids != NULL &&
+                      tokenizer_decode(tok, ids, n, &out, &on) == 0,
+                      "decode under switchable norm mode");
+                if (out) {
+                    if (strcmp(out, want[mi]) != 0) {
+                        fprintf(stderr,
+                                "  mode=%s in=\"%s\" want_len=%zu got_len=%zu\n",
+                                mode_names[mi], cases[i].in, strlen(want[mi]),
+                                on);
+                    }
+                    CHECK(strcmp(out, want[mi]) == 0, "mode-specific output");
+                    tokenizer_free_text(out);
+                }
+                if (ids) tokenizer_free_ids(ids);
+            }
+        }
+
+        /* --norm-reversible alias must behave exactly like --norm=reversible */
+        tokenizer_set_norm_mode(tok, TOKENIZER_NORM_MODE_NFKC);
+        tokenizer_set_norm_reversible(tok, 1);
+        {
+            int *ids = NULL;
+            size_t n = 0;
+            char *out = NULL;
+            size_t on = 0;
+            CHECK(tokenizer_encode(tok, "\xE2\x91\xA0", 3, &ids, &n) == 0 &&
+                  tokenizer_decode(tok, ids, n, &out, &on) == 0 && out != NULL &&
+                  strcmp(out, "\xE2\x91\xA0") == 0,
+                  "set_norm_reversible keeps U+2460 (alias of reversible)");
+            if (ids) tokenizer_free_ids(ids);
+            if (out) tokenizer_free_text(out);
+        }
+        /* turning the alias off falls back to the model header (NFKC here) */
+        tokenizer_set_norm_reversible(tok, 0);
+        {
+            int *ids = NULL;
+            size_t n = 0;
+            char *out = NULL;
+            size_t on = 0;
+            CHECK(tokenizer_encode(tok, "\xE2\x91\xA0", 3, &ids, &n) == 0 &&
+                  tokenizer_decode(tok, ids, n, &out, &on) == 0 && out != NULL &&
+                  strcmp(out, "1") == 0,
+                  "disabling the alias restores the NFKC default (U+2460 -> 1)");
+            if (ids) tokenizer_free_ids(ids);
+            if (out) tokenizer_free_text(out);
+        }
+    }
+
     tokenizer_free(tok);
 
     /* cleanup temp files */

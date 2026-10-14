@@ -73,14 +73,18 @@ static void usage(void) {
         "             --no-byte-fallback --fold-case --json <out.json>\n"
         "             --ckpt <file> --sp-model <out.model> -v\n"
         "  %s encode --model <file> (--text <text> | --file <in.txt>)\n"
-        "             [--norm-reversible] [--segment-rules] [--byte-real]\n"
+        "             [--norm=nfkc|nfc|reversible] [--segment-rules] [--byte-real]\n"
         "  %s decode --model <file> --ids <id,id,...>\n"
         "  %s bench  --model <file> (--file <f> | --list <paths.txt>)"
         " [--repeat N] [--decode-cap N]\n"
-        "             [--norm-reversible] [--segment-rules] [--byte-real]\n"
+        "             [--norm=nfkc|nfc|reversible] [--segment-rules] [--byte-real]\n"
         "    inference overrides (applied after load, for re-evaluating an\n"
         "    already-trained model without a retrain):\n"
-        "      --norm-reversible  lossless NFC-only normalization (P0-1)\n"
+        "      --norm=<mode>      normalization mode (2026-10-14):\n"
+        "                           nfkc       full NFKC (default, lossy)\n"
+        "                           nfc        strict NFC, no compat folding\n"
+        "                           reversible lossless canonical composition\n"
+        "      --norm-reversible  alias of --norm=reversible (P0-1)\n"
         "      --segment-rules    digit 3-grouping + operator isolation (P1-6)\n"
         "      --byte-real        emit real <0xXX> piece ids (P1-4)\n",
         g_prog, g_prog, g_prog, g_prog);
@@ -205,13 +209,43 @@ static tokenizer_t *load_model(const char *model) {
     return tokenizer_load(model);
 }
 
+/* 2026-10-14: --norm=<mode> / --norm <mode> parsing.
+ * Returns the TOKENIZER_NORM_MODE_* value, -1 when the option is absent and
+ * -2 for an unrecognised value (callers report the error and exit). */
+static int cli_parse_norm_mode(const char *v) {
+    if (!v || !*v) return -2;
+    if (strcmp(v, "nfkc") == 0 || strcmp(v, "legacy") == 0)
+        return TOKENIZER_NORM_MODE_NFKC;
+    if (strcmp(v, "nfc") == 0) return TOKENIZER_NORM_MODE_NFC;
+    if (strcmp(v, "reversible") == 0 || strcmp(v, "rev") == 0)
+        return TOKENIZER_NORM_MODE_REVERSIBLE;
+    return -2;
+}
+
+static const char *cli_norm_mode_name(int mode) {
+    switch (mode) {
+        case TOKENIZER_NORM_MODE_NFKC: return "nfkc";
+        case TOKENIZER_NORM_MODE_NFC: return "nfc";
+        case TOKENIZER_NORM_MODE_REVERSIBLE: return "reversible";
+        default: return "unknown";
+    }
+}
+
 /* P0-1 / P1-4 / P1-6 runtime overrides (see tokenizer.h). Applied after load so
  * an already-trained model can be re-evaluated with the fixed encoder without
- * a retrain. Flags only ever turn an override ON (0 = keep the model header). */
-static void apply_infer_flags(tokenizer_t *tok, int norm_rev, int seg_rules,
-                              int byte_real) {
+ * a retrain. Flags only ever turn an override ON (0 = keep the model header);
+ * norm_mode >= 0 is the explicit 2026-10-14 mode switch and wins over the
+ * --norm-reversible alias. */
+static void apply_infer_flags(tokenizer_t *tok, int norm_mode, int norm_rev,
+                              int seg_rules, int byte_real) {
     if (!tok) return;
-    if (norm_rev) tokenizer_set_norm_reversible(tok, 1);
+    if (norm_mode >= 0) {
+        if (tokenizer_set_norm_mode(tok, norm_mode) != 0)
+            fprintf(stderr, "warning: unsupported norm mode id %d ignored\n",
+                    norm_mode);
+    } else if (norm_rev) {
+        tokenizer_set_norm_reversible(tok, 1);
+    }
     if (seg_rules) tokenizer_set_segment_rules(tok, 1);
     if (byte_real) tokenizer_set_byte_real(tok, 1);
 }
@@ -219,6 +253,7 @@ static void apply_infer_flags(tokenizer_t *tok, int norm_rev, int seg_rules,
 static int run_encode(int argc, char **argv) {
     const char *model = NULL, *text = NULL, *file = NULL;
     int norm_rev = 0, seg_rules = 0, byte_real = 0;
+    int norm_mode = -1; /* 2026-10-14: explicit --norm=<mode> override */
     for (int i = 0; i < argc; i++) {
         int next = i + 1;
         const char *v = NULL;
@@ -240,6 +275,22 @@ static int run_encode(int argc, char **argv) {
             file = v;
         } else if (strcmp(argv[i], "--norm-reversible") == 0) {
             norm_rev = 1;
+        } else if (strncmp(argv[i], "--norm=", 7) == 0) {
+            norm_mode = cli_parse_norm_mode(argv[i] + 7);
+            if (norm_mode < 0) {
+                fprintf(stderr, "encode: unknown norm mode '%s' "
+                                "(expected nfkc|nfc|reversible)\n", argv[i] + 7);
+                return 1;
+            }
+        } else if (strcmp(argv[i], "--norm") == 0) {
+            v = arg_value(argc, argv, i, "--norm", &next);
+            if (!v) return 1;
+            norm_mode = cli_parse_norm_mode(v);
+            if (norm_mode < 0) {
+                fprintf(stderr, "encode: unknown norm mode '%s' "
+                                "(expected nfkc|nfc|reversible)\n", v);
+                return 1;
+            }
         } else if (strcmp(argv[i], "--segment-rules") == 0) {
             seg_rules = 1;
         } else if (strcmp(argv[i], "--byte-real") == 0) {
@@ -260,7 +311,7 @@ static int run_encode(int argc, char **argv) {
                 tokenizer_last_error() ? tokenizer_last_error() : "unknown");
         return 1;
     }
-    apply_infer_flags(tok, norm_rev, seg_rules, byte_real);
+    apply_infer_flags(tok, norm_mode, norm_rev, seg_rules, byte_real);
     char *content = NULL;
     size_t content_len = 0;
     if (text) {
@@ -433,6 +484,7 @@ static int run_bench(int argc, char **argv) {
     static char list_buf[32][1024];
     int npaths = 0, repeat = 1, decode_cap = 0;
     int norm_rev = 0, seg_rules = 0, byte_real = 0;
+    int norm_mode = -1; /* 2026-10-14: explicit --norm=<mode> override */
     for (int i = 0; i < argc; i++) {
         int next = i + 1;
         const char *v = NULL;
@@ -461,6 +513,22 @@ static int run_bench(int argc, char **argv) {
             decode_cap = atoi(v);
         } else if (strcmp(argv[i], "--norm-reversible") == 0) {
             norm_rev = 1;
+        } else if (strncmp(argv[i], "--norm=", 7) == 0) {
+            norm_mode = cli_parse_norm_mode(argv[i] + 7);
+            if (norm_mode < 0) {
+                fprintf(stderr, "bench: unknown norm mode '%s' "
+                                "(expected nfkc|nfc|reversible)\n", argv[i] + 7);
+                return 1;
+            }
+        } else if (strcmp(argv[i], "--norm") == 0) {
+            v = arg_value(argc, argv, i, "--norm", &next);
+            if (!v) return 1;
+            norm_mode = cli_parse_norm_mode(v);
+            if (norm_mode < 0) {
+                fprintf(stderr, "bench: unknown norm mode '%s' "
+                                "(expected nfkc|nfc|reversible)\n", v);
+                return 1;
+            }
         } else if (strcmp(argv[i], "--segment-rules") == 0) {
             seg_rules = 1;
         } else if (strcmp(argv[i], "--byte-real") == 0) {
@@ -503,7 +571,14 @@ static int run_bench(int argc, char **argv) {
                 tokenizer_last_error() ? tokenizer_last_error() : "unknown");
         return 1;
     }
-    apply_infer_flags(tok, norm_rev, seg_rules, byte_real);
+    apply_infer_flags(tok, norm_mode, norm_rev, seg_rules, byte_real);
+
+    /* 2026-10-14: the mode actually used by encode(), after resolving the
+     * --norm override / --norm-reversible alias / model header default. */
+    int eff_norm_mode = norm_mode;
+    if (eff_norm_mode < 0)
+        eff_norm_mode = norm_rev ? TOKENIZER_NORM_MODE_REVERSIBLE
+                                 : TOKENIZER_NORM_MODE_NFKC;
 
     double enc_ms_total = 0.0, dec_ms_total = 0.0, dec_tokens_total = 0.0;
     unsigned long long bytes_total = 0, tokens_total = 0, decoded_bytes_sum = 0;
@@ -512,10 +587,13 @@ static int run_bench(int argc, char **argv) {
     printf("\"model\": ");
     json_puts(model);
     printf(", \"mode\": \"in-process\", \"vocab_size\": %d, \"load_ms\": %.3f,"
-           " \"repeat\": %d, \"norm_reversible\": %d, \"segment_rules\": %d,"
+           " \"repeat\": %d, \"norm_mode\": \"%s\", \"norm_mode_id\": %d,"
+           " \"norm_reversible\": %d, \"segment_rules\": %d,"
            " \"byte_real\": %d, \"files\": [",
            (int)tokenizer_vocab_size(tok), load_ms, repeat,
-           norm_rev ? 1 : 0, seg_rules ? 1 : 0, byte_real ? 1 : 0);
+           cli_norm_mode_name(eff_norm_mode), eff_norm_mode,
+           eff_norm_mode == TOKENIZER_NORM_MODE_REVERSIBLE ? 1 : 0,
+           seg_rules ? 1 : 0, byte_real ? 1 : 0);
 
     for (int fi = 0; fi < npaths; fi++) {
         char *content = NULL;

@@ -12,6 +12,7 @@ add_library(tokenizer STATIC
   src/utf8.c
   src/normalize.c
   src/nfkc.c
+  src/nfc.c
   src/trie.c
   src/tokenizer.c
   src/model.c

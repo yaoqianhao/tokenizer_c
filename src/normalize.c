@@ -20,6 +20,7 @@
  */
 #include "normalize.h"
 #include "nfkc.h"
+#include "nfc.h"
 #include "utf8.h"
 
 #include <stdlib.h>
@@ -191,12 +192,20 @@ char *normalize_text_ex(const char *text, size_t len, int mark_spaces,
     }
     /* Pass 2: normalization stage.
      *   mode 0 : full NFKC (compatibility decomposition + recomposition).
-     *   mode 1 : canonical composition only (NFC subset) - lossless, so
-     *            full-width punctuation is NOT folded to ASCII. */
+     *   mode 1 : lossless canonical composition only - so full-width
+     *            punctuation is NOT folded to ASCII.
+     *   mode 2 : strict NFC (canonical decomposition + canonical ordering +
+     *            canonical composition, UAX #15) - same non-folding property
+     *            as mode 1, but fully canonical (adds decomposition of
+     *            precomposed forms and the ordering/blocking rules). */
     uint32_t *norm = NULL;
     size_t nn = 0;
     if (mode == NORM_MODE_REVERSIBLE) {
         nfc_compose_cps(cps, nc, &norm, &nn);
+    } else if (mode == NORM_MODE_NFC) {
+        /* nfc_normalize_cps returns 0 on OOM (norm stays NULL -> hard fail
+         * below, consistent with the NFKC path's failure semantics). */
+        if (!nfc_normalize_cps(cps, nc, &norm, &nn)) norm = NULL;
     } else {
         nfkc_normalize_cps(cps, nc, &norm, &nn);
     }

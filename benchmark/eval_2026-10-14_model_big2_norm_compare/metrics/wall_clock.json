@@ -1,0 +1,24 @@
+{
+  "date": "2026-10-14",
+  "model": "E:\\tokenizer_c\\model_big2.tkm",
+  "model_md5": "057072bb1cabc9249395e8818bca1255",
+  "cli": "E:\\tokenizer_c\\benchmark\\eval_2026-10-14_model_big2_norm_compare\\bin\\tok-cli-norm.exe",
+  "cli_md5": "b8faf2e8ec0d7df6b7aca9c9dce2e6a9",
+  "corpus_dir": "E:\\tokenizer_c\\benchmark\\corpus",
+  "slices_dir": "E:\\tokenizer_c\\benchmark\\eval_2026-10-14_model_big2_norm_compare\\corpus_slices",
+  "mode_elapsed_s": {
+    "nfkc": 62.1,
+    "nfc": 61.5,
+    "reversible": 59.6
+  },
+  "mode_finished_at": {
+    "nfkc": "2026-10-14 14:46:38",
+    "nfc": "2026-10-14 14:47:44",
+    "reversible": "2026-10-14 14:48:44"
+  },
+  "total_eval_elapsed_s": 183.2,
+  "report_generated_at": "2026-10-14 14:48:48",
+  "measure_point": "逐模式端到端墙钟（eval_metrics 合成/真实双口径切片 + 整语料 BPT + 协议鲁棒性段），不含模型训练与编译",
+  "source": "logs/compare_run_<mode>.log 中编排脚本自打印的 elapsed=<n>s 字段",
+  "note": "报告正文表头『单模式评测墙钟(s)』列未回填，实际值以本文件为准；binary_equivalence_verify_2026-10-14.txt 中的 encode/decode 冒烟为独立小样本，不计入本表。"
+}

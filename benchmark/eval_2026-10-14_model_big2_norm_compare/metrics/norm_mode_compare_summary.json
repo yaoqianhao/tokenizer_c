@@ -1,0 +1,291 @@
+{
+  "meta": {
+    "generated_at": "2026-10-14 14:48:48",
+    "model": "E:\\tokenizer_c\\model_big2.tkm",
+    "model_md5": "057072bb1cabc9249395e8818bca1255",
+    "cli": "E:\\tokenizer_c\\benchmark\\eval_2026-10-14_model_big2_norm_compare\\bin\\tok-cli-norm.exe",
+    "cli_md5": "b8faf2e8ec0d7df6b7aca9c9dce2e6a9",
+    "corpus_dir": "E:\\tokenizer_c\\benchmark\\corpus",
+    "slices_dir": "E:\\tokenizer_c\\benchmark\\eval_2026-10-14_model_big2_norm_compare\\corpus_slices",
+    "script": "E:\\tokenizer_c\\benchmark\\eval_2026-10-14_model_big2_norm_compare\\scripts\\norm_mode_compare.py",
+    "eval_metrics": "E:\\tokenizer_c\\benchmark\\eval_metrics.py",
+    "eval_metrics_md5": "7af574cb7ff9312fc2e8a7b50cf19cd9",
+    "git": {
+      "rev": "24cac8aaca17a1f3ade54588743e6767addba6bb",
+      "dirty_files": 14
+    },
+    "vocab_size": 262144
+  },
+  "modes": {
+    "nfkc": {
+      "mode": "nfkc",
+      "cli_extra": [
+        "--norm=nfkc"
+      ],
+      "vocab_size": 262144,
+      "elapsed_s": null,
+      "totals": {
+        "bytes": 37108500,
+        "tokens": 10310146,
+        "bpt": 3.599222
+      },
+      "bpt_synth_per_lang": {
+        "en": 4.589639,
+        "zh": 2.485147,
+        "code": 4.100875
+      },
+      "bpt_real_per_lang": {
+        "en": 4.559845,
+        "zh": 2.374638,
+        "code": 3.379636
+      },
+      "bpt_corpus_per_lang": {
+        "en": 4.588941,
+        "zh": 2.482838,
+        "code": 4.109665
+      },
+      "bpt_total_byte_weighted": 3.599222,
+      "bpt_macro": 3.727148,
+      "aggregate_source": "corpus/<lang>/<lang>.txt 整语料实测（bytes/tokens）",
+      "D": {
+        "en": 1.006534,
+        "zh": 1.046537,
+        "code": 1.213407
+      },
+      "dispersion": {
+        "max_minus_min": 0.206873,
+        "mean": 1.088826,
+        "std": 0.089593,
+        "n": 3
+      },
+      "verdict": {
+        "level": "稳定",
+        "text": "口径稳定：评测语料与真实语料结论一致（dispersion=0.2069 ≤ 0.35）"
+      },
+      "roundtrip": {
+        "code": {
+          "ok": true,
+          "mismatches": 0,
+          "lines": 200
+        },
+        "en": {
+          "ok": true,
+          "mismatches": 0,
+          "lines": 200
+        },
+        "zh": {
+          "ok": false,
+          "mismatches": 85,
+          "lines": 200
+        }
+      },
+      "roundtrip_fail_total": 85,
+      "tokeval": {
+        "utf8_completeness": 0.879285,
+        "char_split_rate": 0.172494,
+        "boundary_crossing_rate": 0.0,
+        "digit_boundary_f1": 0.4,
+        "digit_split_variability": 1.660272,
+        "operator_isolation": 0.433334
+      },
+      "stability": {
+        "per_lang": {
+          "code": 0.784221,
+          "en": 0.791958,
+          "zh": 0.98997
+        },
+        "overall": 0.855383
+      },
+      "throughput": {
+        "encode_tps": 1033146.156,
+        "decode_tps": 52679.45,
+        "load_ms": 68.838
+      },
+      "langs": [
+        "code",
+        "en",
+        "zh"
+      ]
+    },
+    "nfc": {
+      "mode": "nfc",
+      "cli_extra": [
+        "--norm=nfc"
+      ],
+      "vocab_size": 262144,
+      "elapsed_s": null,
+      "totals": {
+        "bytes": 37108500,
+        "tokens": 10456447,
+        "bpt": 3.548863
+      },
+      "bpt_synth_per_lang": {
+        "en": 4.589639,
+        "zh": 2.402065,
+        "code": 4.100875
+      },
+      "bpt_real_per_lang": {
+        "en": 4.553904,
+        "zh": 2.157275,
+        "code": 3.377851
+      },
+      "bpt_corpus_per_lang": {
+        "en": 4.588941,
+        "zh": 2.400322,
+        "code": 4.109665
+      },
+      "bpt_total_byte_weighted": 3.548863,
+      "bpt_macro": 3.699643,
+      "aggregate_source": "corpus/<lang>/<lang>.txt 整语料实测（bytes/tokens）",
+      "D": {
+        "en": 1.007847,
+        "zh": 1.113472,
+        "code": 1.214049
+      },
+      "dispersion": {
+        "max_minus_min": 0.206202,
+        "mean": 1.111789,
+        "std": 0.08419,
+        "n": 3
+      },
+      "verdict": {
+        "level": "稳定",
+        "text": "口径稳定：评测语料与真实语料结论一致（dispersion=0.2062 ≤ 0.35）"
+      },
+      "roundtrip": {
+        "code": {
+          "ok": true,
+          "mismatches": 0,
+          "lines": 200
+        },
+        "en": {
+          "ok": true,
+          "mismatches": 0,
+          "lines": 200
+        },
+        "zh": {
+          "ok": true,
+          "mismatches": 0,
+          "lines": 200
+        }
+      },
+      "roundtrip_fail_total": 0,
+      "tokeval": {
+        "utf8_completeness": 0.867491,
+        "char_split_rate": 0.172494,
+        "boundary_crossing_rate": 0.0,
+        "digit_boundary_f1": 0.4,
+        "digit_split_variability": 1.660272,
+        "operator_isolation": 0.433334
+      },
+      "stability": {
+        "per_lang": {
+          "code": 0.784221,
+          "en": 0.791958,
+          "zh": 0.990202
+        },
+        "overall": 0.85546
+      },
+      "throughput": {
+        "encode_tps": 1089587.273,
+        "decode_tps": 59875.18,
+        "load_ms": 71.774
+      },
+      "langs": [
+        "code",
+        "en",
+        "zh"
+      ]
+    },
+    "reversible": {
+      "mode": "reversible",
+      "cli_extra": [
+        "--norm=reversible"
+      ],
+      "vocab_size": 262144,
+      "elapsed_s": null,
+      "totals": {
+        "bytes": 37108500,
+        "tokens": 10456447,
+        "bpt": 3.548863
+      },
+      "bpt_synth_per_lang": {
+        "en": 4.589639,
+        "zh": 2.402065,
+        "code": 4.100875
+      },
+      "bpt_real_per_lang": {
+        "en": 4.55338,
+        "zh": 2.156868,
+        "code": 3.377802
+      },
+      "bpt_corpus_per_lang": {
+        "en": 4.588941,
+        "zh": 2.400322,
+        "code": 4.109665
+      },
+      "bpt_total_byte_weighted": 3.548863,
+      "bpt_macro": 3.699643,
+      "aggregate_source": "corpus/<lang>/<lang>.txt 整语料实测（bytes/tokens）",
+      "D": {
+        "en": 1.007963,
+        "zh": 1.113682,
+        "code": 1.214066
+      },
+      "dispersion": {
+        "max_minus_min": 0.206103,
+        "mean": 1.111904,
+        "std": 0.084151,
+        "n": 3
+      },
+      "verdict": {
+        "level": "稳定",
+        "text": "口径稳定：评测语料与真实语料结论一致（dispersion=0.2061 ≤ 0.35）"
+      },
+      "roundtrip": {
+        "code": {
+          "ok": true,
+          "mismatches": 0,
+          "lines": 200
+        },
+        "en": {
+          "ok": true,
+          "mismatches": 0,
+          "lines": 200
+        },
+        "zh": {
+          "ok": true,
+          "mismatches": 0,
+          "lines": 200
+        }
+      },
+      "roundtrip_fail_total": 0,
+      "tokeval": {
+        "utf8_completeness": 0.867491,
+        "char_split_rate": 0.172494,
+        "boundary_crossing_rate": 0.0,
+        "digit_boundary_f1": 0.4,
+        "digit_split_variability": 1.660272,
+        "operator_isolation": 0.433334
+      },
+      "stability": {
+        "per_lang": {
+          "code": 0.784221,
+          "en": 0.791958,
+          "zh": 0.990202
+        },
+        "overall": 0.85546
+      },
+      "throughput": {
+        "encode_tps": 1129320.291,
+        "decode_tps": 60969.052,
+        "load_ms": 75.744
+      },
+      "langs": [
+        "code",
+        "en",
+        "zh"
+      ]
+    }
+  }
+}

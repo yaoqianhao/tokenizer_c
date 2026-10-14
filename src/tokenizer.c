@@ -60,6 +60,9 @@ tokenizer_t *tokenizer_create(int unk_id, int bos_id, int eos_id, int pad_id,
     tok->eos_id = eos_id;
     tok->pad_id = pad_id;
     tok->byte_fallback = byte_fallback;
+    /* 2026-10-14: -1 = no explicit normalization-mode override, so encode()
+     * keeps following norm_reversible (legacy behaviour preserved). */
+    tok->norm_mode = -1;
     /* P1-4: byte -> real piece id table starts empty (-1 = none). */
     for (int b = 0; b < 256; b++) tok->byte_ids[b] = -1;
     tok->trie = trie_new();
@@ -307,7 +310,24 @@ void tokenizer_set_normalizer_hook(tokenizer_t *tok,
  * They exist so already-trained models can be re-evaluated with a fixed
  * encoder without a retrain. */
 void tokenizer_set_norm_reversible(tokenizer_t *tok, int enable) {
-    if (tok) tok->norm_reversible = enable ? 1 : 0;
+    if (!tok) return;
+    tok->norm_reversible = enable ? 1 : 0;
+    /* Keep the unified mode switch in sync: enabling maps to the explicit
+     * reversible mode, disabling drops the override (model header wins). */
+    tok->norm_mode = enable ? NORM_MODE_REVERSIBLE : -1;
+}
+
+/* 2026-10-14: unified normalization-mode switch (NFKC / NFC / reversible).
+ * See tokenizer.h; only encode() is affected, decode() stays byte-exact. */
+int tokenizer_set_norm_mode(tokenizer_t *tok, int mode) {
+    if (!tok) return -1;
+    if (mode != NORM_MODE_LEGACY_NFKC && mode != NORM_MODE_NFC &&
+        mode != NORM_MODE_REVERSIBLE)
+        return -1;
+    tok->norm_mode = mode;
+    /* keep the legacy header flag consistent with the explicit mode */
+    tok->norm_reversible = (mode == NORM_MODE_REVERSIBLE) ? 1 : 0;
+    return 0;
 }
 
 void tokenizer_set_segment_rules(tokenizer_t *tok, int enable) {
@@ -352,14 +372,20 @@ static char *normalize_for_encode(const tokenizer_t *tok, const char *text,
         if (r) return r;
         /* hook returned NULL => fall through to builtin */
     }
-    /* P0-1: reversible mode keeps full-width/compatibility forms intact so
+    /* 2026-10-14: three switchable normalization modes, resolved in order:
+     *   1. explicit runtime override (tokenizer_set_norm_mode / --norm=...)
+     *   2. the norm_reversible flag carried by the model header (P0-1)
+     *   3. the historical default: full NFKC
+     * Reversible mode keeps full-width/compatibility forms intact so
      * encode -> decode is byte-exact (fixes the U+FF0C -> U+002C round-trip
-     * failure). The legacy NFKC mode is still reachable for old models that
-     * do not set the norm_reversible flag. */
+     * failure). NFC mode is the strict canonical form: composition happens,
+     * compatibility folding never does. */
+    int mode = tok->norm_mode;
+    if (mode < 0)
+        mode = tok->norm_reversible ? NORM_MODE_REVERSIBLE
+                                    : NORM_MODE_LEGACY_NFKC;
     return normalize_text_ex(text, len, 1 /*mark_spaces*/, tok->fold_case,
-                             tok->norm_reversible ? NORM_MODE_REVERSIBLE
-                                                  : NORM_MODE_LEGACY_NFKC,
-                             out_len);
+                             mode, out_len);
 }
 
 int tokenizer_encode(const tokenizer_t *tok, const char *text, size_t len,

@@ -54,6 +54,10 @@ struct tokenizer {
     int byte_fallback;  /* nonzero => <0xXX> fallback enabled */
     int fold_case;      /* nonzero => normalize folded case at encode (P1-3) */
     int norm_reversible;/* nonzero => NFC-only normalization at encode (P0-1) */
+    int norm_mode;      /* explicit normalization-mode override
+                         * (NORM_MODE_LEGACY_NFKC / NORM_MODE_NFC /
+                         *  NORM_MODE_REVERSIBLE); -1 = follow norm_reversible.
+                         * 2026-10-14: switchable NFKC / NFC / reversible. */
     int segment_rules;  /* nonzero => deterministic digit/operator cuts (P1-6) */
     int byte_real;      /* nonzero => emit real <0xXX> pieces, not virtual ids
                          * (-1-byte) on the byte-fallback path (P1-4) */

@@ -18,7 +18,7 @@ $Build = Join-Path $Root "build"
 if ($Gcc) {
     New-Item -ItemType Directory -Force -Path $Build | Out-Null
     $objs = @()
-    foreach ($src in @("utf8.c","normalize.c","nfkc.c","trie.c","tokenizer.c","model.c","segment_rules.c","sentencepiece.c","trainer.c")) {
+    foreach ($src in @("utf8.c","normalize.c","nfkc.c","nfc.c","trie.c","tokenizer.c","model.c","segment_rules.c","sentencepiece.c","trainer.c")) {
         $obj = Join-Path $Build ($src -replace '\.c$', '.o')
         & gcc -std=c11 -Wall -Wextra -O2 -I (Join-Path $Root "include") -I (Join-Path $Root "src") -c (Join-Path $Root ("src\" + $src)) -o $obj
         if ($LASTEXITCODE -ne 0) { throw "compile failed: $src" }
