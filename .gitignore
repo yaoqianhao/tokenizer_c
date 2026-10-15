@@ -60,3 +60,6 @@ desktop.ini
 
 # ===== 本地备份 =====
 backup_round8/
+
+# ===== Python venv (never commit) =====
+.venv/

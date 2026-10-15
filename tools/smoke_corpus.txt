@@ -1,0 +1,301 @@
+字节回退机制在本次实验中持续优化，加载耗时因此成为重点关注对象。
+压缩率在本次实验中稳步下降，零宽字符剔除因此成为重点关注对象。
+The vocabulary is validated by memory footprint during this experiment.
+压缩率在本次实验中保持不变，全角标点处理因此成为重点关注对象。
+The evaluation harness differs memory footprint during this experiment.
+压缩率在本次实验中显著提升，全角标点处理因此成为重点关注对象。
+cfg['decoder'] = {'type': 'Sequence', 'decoders': [
+训练语料在本次实验中持续优化，句级切分的一致性因此成为重点关注对象。
+评测框架在本次实验中已被修复，下游任务的准确率因此成为重点关注对象。
+python tools/hf_pipeline.py all --corpus tools/smoke_corpus.txt
+The normalizer is validated by the zero width stripping during this experiment.
+字节回退机制在本次实验中已被修复，token 用量统计因此成为重点关注对象。
+深度学习模型在本次实验中需要重建，全角标点处理因此成为重点关注对象。
+导出格式在本次实验中已被修复，句级切分的一致性因此成为重点关注对象。
+The vocabulary remains the loading time during this experiment.
+The byte fallback path degrades the downstream accuracy during this experiment.
+The evaluation harness differs the loading time during this experiment.
+评测框架在本次实验中出现波动，下游任务的准确率因此成为重点关注对象。
+深度学习模型在本次实验中需要重建，句级切分的一致性因此成为重点关注对象。
+推理速度在本次实验中保持不变，零宽字符剔除因此成为重点关注对象。
+深度学习模型在本次实验中稳步下降，句级切分的一致性因此成为重点关注对象。
+
+A fast tokenizer export matches the downstream accuracy during this experiment.
+中文分词器在本次实验中持续优化，下游任务的准确率因此成为重点关注对象。
+词表规模在本次实验中显著提升，句级切分的一致性因此成为重点关注对象。
+The evaluation harness is validated by the zero width stripping during this experiment.
+
+A fast tokenizer export depends on the piece level parity during this experiment.
+推理速度在本次实验中保持不变，字节级还原率因此成为重点关注对象。
+cmake --build build --config Release
+Token usage matches the byte-per-token ratio during this experiment.
+The vocabulary degrades the whitespace handling during this experiment.
+深度学习模型在本次实验中需要重建，零宽字符剔除因此成为重点关注对象。
+    return ids
+The evaluation harness matches compression ratio during this experiment.
+The normalizer converges the loading time during this experiment.
+推理速度在本次实验中稳步下降，token 用量统计因此成为重点关注对象。
+    if (argc < 2) { usage(); return 1; }
+压缩率在本次实验中需要重建，全角标点处理因此成为重点关注对象。
+推理速度在本次实验中稳步下降，全角标点处理因此成为重点关注对象。
+    if piece.startswith('<0x'):
+The evaluation harness degrades the loading time during this experiment.
+The unigram tokenizer matches compression ratio during this experiment.
+The normalizer differs the byte-per-token ratio during this experiment.
+深度学习模型在本次实验中稳步下降，全角标点处理因此成为重点关注对象。
+Token usage degrades the loading time during this experiment.
+The vocabulary depends on the loading time during this experiment.
+字节回退机制在本次实验中得到验证，字节级还原率因此成为重点关注对象。
+The unigram tokenizer improves memory footprint during this experiment.
+字节回退机制在本次实验中需要重建，内存占用因此成为重点关注对象。
+The unigram tokenizer differs the byte-per-token ratio during this experiment.
+词表规模在本次实验中显著提升，下游任务的准确率因此成为重点关注对象。
+The vocabulary matches the downstream accuracy during this experiment.
+The unigram tokenizer depends on compression ratio during this experiment.
+The evaluation harness is validated by the byte-per-token ratio during this experiment.
+推理速度在本次实验中已被修复，零宽字符剔除因此成为重点关注对象。
+推理速度在本次实验中保持不变，下游任务的准确率因此成为重点关注对象。
+压缩率在本次实验中持续优化，全角标点处理因此成为重点关注对象。
+评测框架在本次实验中稳步下降，下游任务的准确率因此成为重点关注对象。
+归一化流程在本次实验中需要重建，token 用量统计因此成为重点关注对象。
+中文分词器在本次实验中得到验证，token 用量统计因此成为重点关注对象。
+        byte_ids.append(i)
+The normalizer remains the downstream accuracy during this experiment.
+The evaluation harness remains memory footprint during this experiment.
+The vocabulary remains the downstream accuracy during this experiment.
+深度学习模型在本次实验中需要重建，零宽字符剔除因此成为重点关注对象。
+The normalizer converges the zero width stripping during this experiment.
+导出格式在本次实验中保持不变，内存占用因此成为重点关注对象。
+The normalizer matches the loading time during this experiment.
+训练语料在本次实验中稳步下降，全角标点处理因此成为重点关注对象。
+The evaluation harness converges the downstream accuracy during this experiment.
+压缩率在本次实验中保持不变，下游任务的准确率因此成为重点关注对象。
+SentencePiece compatibility depends on the piece level parity during this experiment.
+
+导出格式在本次实验中持续优化，内存占用因此成为重点关注对象。
+评测框架在本次实验中得到验证，下游任务的准确率因此成为重点关注对象。
+The unigram tokenizer remains memory footprint during this experiment.
+The evaluation harness improves the downstream accuracy during this experiment.
+A fast tokenizer export differs compression ratio during this experiment.
+    return ids
+The unigram tokenizer remains the downstream accuracy during this experiment.
+python tools/hf_pipeline.py all --corpus tools/smoke_corpus.txt
+A fast tokenizer export differs the byte-per-token ratio during this experiment.
+深度学习模型在本次实验中持续优化，句级切分的一致性因此成为重点关注对象。
+深度学习模型在本次实验中已被修复，内存占用因此成为重点关注对象。
+词表规模在本次实验中持续优化，token 用量统计因此成为重点关注对象。
+}
+SentencePiece compatibility matches the byte-per-token ratio during this experiment.
+The byte fallback path converges the piece level parity during this experiment.
+评测框架在本次实验中得到验证，下游任务的准确率因此成为重点关注对象。
+The byte fallback path improves the piece level parity during this experiment.
+The normalizer is validated by compression ratio during this experiment.
+
+Token usage differs the downstream accuracy during this experiment.
+for i, piece in enumerate(vocab):
+训练语料在本次实验中已被修复，句级切分的一致性因此成为重点关注对象。
+    return ids
+The evaluation harness depends on the byte-per-token ratio during this experiment.
+int main(int argc, char **argv) {
+cmake --build build --config Release
+The normalizer degrades the loading time during this experiment.
+The evaluation harness remains the zero width stripping during this experiment.
+cmake --build build --config Release
+A fast tokenizer export degrades the downstream accuracy during this experiment.
+词表规模在本次实验中保持不变，零宽字符剔除因此成为重点关注对象。
+The unigram tokenizer converges memory footprint during this experiment.
+训练语料在本次实验中稳步下降，零宽字符剔除因此成为重点关注对象。
+深度学习模型在本次实验中保持不变，字节级还原率因此成为重点关注对象。
+中文分词器在本次实验中出现波动，下游任务的准确率因此成为重点关注对象。
+中文分词器在本次实验中已被修复，token 用量统计因此成为重点关注对象。
+    return run_train(argc - 2, argv + 2);
+The vocabulary is validated by the zero width stripping during this experiment.
+int main(int argc, char **argv) {
+SentencePiece compatibility converges memory footprint during this experiment.
+The vocabulary differs the loading time during this experiment.
+
+中文分词器在本次实验中已被修复，下游任务的准确率因此成为重点关注对象。
+emoji 混排测试 😀🎉🚀 与中英文 mixed 文本 12345
+The unigram tokenizer remains the zero width stripping during this experiment.
+压缩率在本次实验中稳步下降，内存占用因此成为重点关注对象。
+    if (argc < 2) { usage(); return 1; }
+    return run_train(argc - 2, argv + 2);
+cmake --build build --config Release
+训练语料在本次实验中得到验证，零宽字符剔除因此成为重点关注对象。
+推理速度在本次实验中已被修复，下游任务的准确率因此成为重点关注对象。
+
+    if piece.startswith('<0x'):
+The byte fallback path remains the piece level parity during this experiment.
+词表规模在本次实验中保持不变，零宽字符剔除因此成为重点关注对象。
+归一化流程在本次实验中得到验证，零宽字符剔除因此成为重点关注对象。
+SentencePiece compatibility converges the loading time during this experiment.
+for i, piece in enumerate(vocab):
+The vocabulary matches the zero width stripping during this experiment.
+深度学习模型在本次实验中出现波动，token 用量统计因此成为重点关注对象。
+字节回退机制在本次实验中需要重建，句级切分的一致性因此成为重点关注对象。
+训练语料在本次实验中稳步下降，token 用量统计因此成为重点关注对象。
+字节回退机制在本次实验中保持不变，字节级还原率因此成为重点关注对象。
+cmake --build build --config Release
+字节回退机制在本次实验中稳步下降，加载耗时因此成为重点关注对象。
+词表规模在本次实验中显著提升，全角标点处理因此成为重点关注对象。
+
+    return run_train(argc - 2, argv + 2);
+深度学习模型在本次实验中稳步下降，加载耗时因此成为重点关注对象。
+    ids = tokenizer.encode(text)
+深度学习模型在本次实验中已被修复，字节级还原率因此成为重点关注对象。
+评测框架在本次实验中出现波动，内存占用因此成为重点关注对象。
+The unigram tokenizer differs compression ratio during this experiment.
+SentencePiece compatibility depends on the loading time during this experiment.
+训练语料在本次实验中需要重建，token 用量统计因此成为重点关注对象。
+归一化流程在本次实验中出现波动，内存占用因此成为重点关注对象。
+The normalizer depends on the byte-per-token ratio during this experiment.
+评测框架在本次实验中稳步下降，全角标点处理因此成为重点关注对象。
+中文分词器在本次实验中显著提升，下游任务的准确率因此成为重点关注对象。
+字节回退机制在本次实验中保持不变，字节级还原率因此成为重点关注对象。
+The vocabulary is validated by the byte-per-token ratio during this experiment.
+    if (argc < 2) { usage(); return 1; }
+深度学习模型在本次实验中需要重建，句级切分的一致性因此成为重点关注对象。
+字节回退机制在本次实验中显著提升，下游任务的准确率因此成为重点关注对象。
+The vocabulary differs the whitespace handling during this experiment.
+归一化流程在本次实验中已被修复，加载耗时因此成为重点关注对象。
+SentencePiece compatibility depends on the downstream accuracy during this experiment.
+Token usage is validated by the byte-per-token ratio during this experiment.
+    return run_train(argc - 2, argv + 2);
+    return run_train(argc - 2, argv + 2);
+压缩率在本次实验中稳步下降，下游任务的准确率因此成为重点关注对象。
+训练语料在本次实验中保持不变，下游任务的准确率因此成为重点关注对象。
+    return run_train(argc - 2, argv + 2);
+The normalizer degrades the whitespace handling during this experiment.
+The normalizer matches the whitespace handling during this experiment.
+导出格式在本次实验中保持不变，字节级还原率因此成为重点关注对象。
+词表规模在本次实验中需要重建，全角标点处理因此成为重点关注对象。
+SentencePiece compatibility converges compression ratio during this experiment.
+A fast tokenizer export improves the piece level parity during this experiment.
+
+归一化流程在本次实验中显著提升，全角标点处理因此成为重点关注对象。
+训练语料在本次实验中需要重建，零宽字符剔除因此成为重点关注对象。
+The unigram tokenizer remains the zero width stripping during this experiment.
+中文分词器在本次实验中需要重建，内存占用因此成为重点关注对象。
+The vocabulary differs the whitespace handling during this experiment.
+字节回退机制在本次实验中已被修复，加载耗时因此成为重点关注对象。
+Token usage improves memory footprint during this experiment.
+词表规模在本次实验中持续优化，句级切分的一致性因此成为重点关注对象。
+零宽字符测试：这里​有一个‍零宽连接符﻿和软连字符­。
+压缩率在本次实验中显著提升，token 用量统计因此成为重点关注对象。
+词表规模在本次实验中已被修复，句级切分的一致性因此成为重点关注对象。
+字节回退机制在本次实验中显著提升，字节级还原率因此成为重点关注对象。
+导出格式在本次实验中显著提升，字节级还原率因此成为重点关注对象。
+SentencePiece compatibility matches the downstream accuracy during this experiment.
+
+压缩率在本次实验中需要重建，下游任务的准确率因此成为重点关注对象。
+Token usage differs the downstream accuracy during this experiment.
+深度学习模型在本次实验中保持不变，字节级还原率因此成为重点关注对象。
+归一化流程在本次实验中稳步下降，字节级还原率因此成为重点关注对象。
+The byte fallback path matches memory footprint during this experiment.
+A fast tokenizer export degrades compression ratio during this experiment.
+The evaluation harness matches the byte-per-token ratio during this experiment.
+导出格式在本次实验中需要重建，token 用量统计因此成为重点关注对象。
+The byte fallback path is validated by the byte-per-token ratio during this experiment.
+The evaluation harness converges the loading time during this experiment.
+A fast tokenizer export depends on the loading time during this experiment.
+A fast tokenizer export depends on the downstream accuracy during this experiment.
+The unigram tokenizer differs compression ratio during this experiment.
+字节回退机制在本次实验中已被修复，内存占用因此成为重点关注对象。
+深度学习模型在本次实验中持续优化，内存占用因此成为重点关注对象。
+中文分词器在本次实验中需要重建，下游任务的准确率因此成为重点关注对象。
+Token usage degrades memory footprint during this experiment.
+导出格式在本次实验中需要重建，token 用量统计因此成为重点关注对象。
+字节回退机制在本次实验中稳步下降，下游任务的准确率因此成为重点关注对象。
+A fast tokenizer export differs the loading time during this experiment.
+
+深度学习模型在本次实验中持续优化，下游任务的准确率因此成为重点关注对象。
+深度学习模型在本次实验中得到验证，内存占用因此成为重点关注对象。
+词表规模在本次实验中显著提升，token 用量统计因此成为重点关注对象。
+A fast tokenizer export remains the byte-per-token ratio during this experiment.
+The unigram tokenizer degrades the zero width stripping during this experiment.
+训练语料在本次实验中稳步下降，句级切分的一致性因此成为重点关注对象。
+导出格式在本次实验中显著提升，字节级还原率因此成为重点关注对象。
+    return ids
+Token usage converges compression ratio during this experiment.
+归一化流程在本次实验中持续优化，加载耗时因此成为重点关注对象。
+全角标点测试（括号）：，。；！？——书名号《测试》引号“引号”
+The vocabulary differs the loading time during this experiment.
+The evaluation harness converges the whitespace handling during this experiment.
+The unigram tokenizer converges the byte-per-token ratio during this experiment.
+SentencePiece compatibility depends on the byte-per-token ratio during this experiment.
+
+def encode(text: str) -> list[int]:
+The byte fallback path improves the loading time during this experiment.
+Token usage remains the byte-per-token ratio during this experiment.
+The vocabulary improves the loading time during this experiment.
+Token usage degrades the whitespace handling during this experiment.
+SentencePiece compatibility differs the loading time during this experiment.
+A fast tokenizer export matches the byte-per-token ratio during this experiment.
+The vocabulary degrades compression ratio during this experiment.
+    if piece.startswith('<0x'):
+The evaluation harness degrades compression ratio during this experiment.
+cfg['decoder'] = {'type': 'Sequence', 'decoders': [
+python tools/hf_pipeline.py all --corpus tools/smoke_corpus.txt
+    {'type': 'ByteFallback'},
+归一化流程在本次实验中出现波动，零宽字符剔除因此成为重点关注对象。
+Token usage depends on memory footprint during this experiment.
+归一化流程在本次实验中需要重建，加载耗时因此成为重点关注对象。
+中文分词器在本次实验中稳步下降，字节级还原率因此成为重点关注对象。
+Token usage converges the zero width stripping during this experiment.
+The normalizer matches the downstream accuracy during this experiment.
+字节回退机制在本次实验中出现波动，字节级还原率因此成为重点关注对象。
+for i, piece in enumerate(vocab):
+int main(int argc, char **argv) {
+The normalizer remains compression ratio during this experiment.
+推理速度在本次实验中得到验证，加载耗时因此成为重点关注对象。
+    {'type': 'Metaspace', 'replacement': '\u2581', 'prepend_scheme': 'never'}]}
+    {'type': 'ByteFallback'},
+python tools/hf_pipeline.py all --corpus tools/smoke_corpus.txt
+The vocabulary improves the downstream accuracy during this experiment.
+The evaluation harness converges the downstream accuracy during this experiment.
+    return ids
+推理速度在本次实验中出现波动，token 用量统计因此成为重点关注对象。
+python tools/hf_pipeline.py all --corpus tools/smoke_corpus.txt
+The evaluation harness converges the piece level parity during this experiment.
+The evaluation harness matches the whitespace handling during this experiment.
+推理速度在本次实验中稳步下降，内存占用因此成为重点关注对象。
+def encode(text: str) -> list[int]:
+The normalizer depends on the whitespace handling during this experiment.
+The unigram tokenizer remains the piece level parity during this experiment.
+The vocabulary improves the byte-per-token ratio during this experiment.
+归一化流程在本次实验中保持不变，内存占用因此成为重点关注对象。
+中文分词器在本次实验中出现波动，内存占用因此成为重点关注对象。
+A fast tokenizer export remains the whitespace handling during this experiment.
+
+The unigram tokenizer degrades the byte-per-token ratio during this experiment.
+The vocabulary differs the byte-per-token ratio during this experiment.
+python tools/hf_pipeline.py all --corpus tools/smoke_corpus.txt
+推理速度在本次实验中稳步下降，字节级还原率因此成为重点关注对象。
+The unigram tokenizer depends on the piece level parity during this experiment.
+字节回退机制在本次实验中已被修复，token 用量统计因此成为重点关注对象。
+cfg['decoder'] = {'type': 'Sequence', 'decoders': [
+The evaluation harness degrades the loading time during this experiment.
+词表规模在本次实验中持续优化，加载耗时因此成为重点关注对象。
+The vocabulary is validated by the piece level parity during this experiment.
+The byte fallback path improves compression ratio during this experiment.
+A fast tokenizer export improves the loading time during this experiment.
+评测框架在本次实验中需要重建，句级切分的一致性因此成为重点关注对象。
+
+字节回退机制在本次实验中持续优化，加载耗时因此成为重点关注对象。
+归一化流程在本次实验中稳步下降，内存占用因此成为重点关注对象。
+训练语料在本次实验中显著提升，下游任务的准确率因此成为重点关注对象。
+The vocabulary is validated by the loading time during this experiment.
+
+The normalizer improves the zero width stripping during this experiment.
+The vocabulary degrades the byte-per-token ratio during this experiment.
+归一化流程在本次实验中保持不变，加载耗时因此成为重点关注对象。
+导出格式在本次实验中得到验证，加载耗时因此成为重点关注对象。
+制表符	与多空格    与换行前的空格 
+词表规模在本次实验中显著提升，加载耗时因此成为重点关注对象。
+SentencePiece compatibility degrades the piece level parity during this experiment.
+字节回退机制在本次实验中显著提升，加载耗时因此成为重点关注对象。
+The vocabulary differs the byte-per-token ratio during this experiment.
+def encode(text: str) -> list[int]:
+压缩率在本次实验中持续优化，加载耗时因此成为重点关注对象。
+SentencePiece compatibility degrades the piece level parity during this experiment.
+（内容由AI生成，仅供参考）
