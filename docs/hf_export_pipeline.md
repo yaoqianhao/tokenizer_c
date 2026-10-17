@@ -2,17 +2,19 @@
 AIGC:
     Label: "1"
     ContentProducer: 001191440300708461136T1XGW3
-    ProduceID: 04526fdd866a8c5c9aceee6b83ed2c05_efba2d58c83f11f18569525400638852
-    ReservedCode1: AQ1yTGkDGy3/5L08l3winoCBsce4Z6VOn+xTRvDjRP1n0aejs9mCUnrGvTQW4CUkgTVaruVxjj2zMSgmZZbTy3XBKAOlLxHu3o0H9EHCEzQCMDu6xrXV9IIckbbXcPoxcelej0hefwqVAMxKLVgF7ZAiIwRPT4Dli6c1e+caGcSCOd9hul4hyDsypCM=
+    ProduceID: 04526fdd866a8c5c9aceee6b83ed2c05_ada9909ec96411f18e0e52540064ee0f
+    ReservedCode1: o2TLFwki5NL5gVtj0P8PLhKNDy1LPXuUA4koYXI0TXhASaC/D2j+gylLvhgdt4WZOekKxt2IHghsMUIETPA4CWxRg5+pTCeZUsOzU5nIlZZtnI5bymlMex6nqmffgVXf9gBRfiX7YIS5t/ErK5jmU8ufc7lcodq3GQNWSA8a7bojTrUrb7ug16j7vK8=
     ContentPropagator: 001191440300708461136T1XGW3
-    PropagateID: 04526fdd866a8c5c9aceee6b83ed2c05_efba2d58c83f11f18569525400638852
-    ReservedCode2: AQ1yTGkDGy3/5L08l3winoCBsce4Z6VOn+xTRvDjRP1n0aejs9mCUnrGvTQW4CUkgTVaruVxjj2zMSgmZZbTy3XBKAOlLxHu3o0H9EHCEzQCMDu6xrXV9IIckbbXcPoxcelej0hefwqVAMxKLVgF7ZAiIwRPT4Dli6c1e+caGcSCOd9hul4hyDsypCM=
+    PropagateID: 04526fdd866a8c5c9aceee6b83ed2c05_ada9909ec96411f18e0e52540064ee0f
+    ReservedCode2: o2TLFwki5NL5gVtj0P8PLhKNDy1LPXuUA4koYXI0TXhASaC/D2j+gylLvhgdt4WZOekKxt2IHghsMUIETPA4CWxRg5+pTCeZUsOzU5nIlZZtnI5bymlMex6nqmffgVXf9gBRfiX7YIS5t/ErK5jmU8ufc7lcodq3GQNWSA8a7bojTrUrb7ug16j7vK8=
 ---
+
+
 
 # tokenizer_c → HuggingFace fast tokenizer 转换流水线
 
-> 文档版本 v1.0 ｜ 落盘日期 2026-10-15 ｜ 适用仓库 `E:\tokenizer_c`
-> 对应实现：[`tools\hf_export.py`](<E:\tokenizer_c\tools\hf_export.py>)（32,189 B，转换器/校验器）、[`tools\hf_pipeline.py`](<E:\tokenizer_c\tools\hf_pipeline.py>)（14,738 B，端到端编排器）
+> 文档版本 v1.1 ｜ 落盘日期 2026-10-15 ｜ 最近更新 2026-10-16（默认归一化模式改 NFC） ｜ 适用仓库 `E:\tokenizer_c`
+> 对应实现：[`tools\hf_export.py`](<E:\tokenizer_c\tools\hf_export.py>)（43,882 B，转换器/校验器）、[`tools\hf_pipeline.py`](<E:\tokenizer_c\tools\hf_pipeline.py>)（16,764 B，端到端编排器）
 > 行为准绳：附件脚本 `patch_model_big2_to_hf.py` 的定稿行为 + `HF_fast_格式核验报告.md` 的 parity 口径
 
 ---
@@ -23,7 +25,7 @@ AIGC:
 
 1. `model.json` 顶层带有 `unk_token` / `bos_token` 等**非 `tokenizer.json` 合法键**；
 2. `decoder` 缺 `ByteFallback` 解码链，导致 `<0xXX>` 字节序列无法还原成文本；
-3. `pre_tokenizer` / `normalizer` 缺失（HF 侧需要 Metaspace + NFKC 归一化链）；
+3. `pre_tokenizer` / `normalizer` 缺失（HF 侧需要 Metaspace + 归一化链，默认 NFC）；
 4. 词表里约 4.3% 的 piece 分数是 `null`（训练剪枝残留），以及 256 个 `<0xXX>` 字节 piece 缺失。
 
 本流水线把这些差异**一次性、可复现、可自检**地抹平，并给出"转换后能不能真的替代 C 路径"的**逐 piece 判定**，而不是靠 token 数容差拍脑袋放行。
@@ -46,9 +48,9 @@ AIGC:
                                   │  J = model.json（Unigram：model.vocab = [[piece, score], ...]）
                                   ▼
         ┌────────────────────────────────────────────────────────────┐
-        │ [3/4] export   体检（8 项）→ 7 处修复 → 写 3 个文件          │
-        │   tokenizer.json / tokenizer_config.json /                  │
-        │   special_tokens_map.json                                   │
+        │ [3/4] export   体检（8 项）→ 7 处修复 → 写 4 个文件          │
+        │   tokenizer.json / tokenizer_config.json /                 │
+        │   special_tokens_map.json / tokenizer_c_norm.json          │
         └────────────────────────────────────────────────────────────┘
                                   │  out_dir（HF fast 目录）
                                   ▼
@@ -118,8 +120,10 @@ E:\tokenizer_c\.venv\Scripts\python.exe tools\hf_pipeline.py verify --json model
 | 参数 | 必填 | 默认 | 含义 |
 |---|---|---|---|
 | `--json` | ✔ | — | 输入 `model.json`（`tok-cli train --json` 产物）；不存在直接 `exit 1` |
-| `--out` | ✔ | — | 输出目录，写 `tokenizer.json` 等三个文件 |
+| `--out` | ✔ | — | 输出目录，写 `tokenizer.json` 等 4 个文件（含归一化 sidecar） |
 | `--model-type` | ✘ | 取 json 里的 `model.type` | 覆盖 `model.type`，仅允许 `Unigram` / `BPE` / `WordPiece` / `WordLevel`，非法值 `exit 1` |
+| `--norm` | ✘ | `nfc` | 归一化模式 `nfkc` / `nfc` / `reversible`（兼容别名 `legacy` / `norm-reversible` 等）；决定 normalizer 链、`tokenizer_c_norm.json` sidecar 与 C 侧比对口径 |
+| `--norm-reversible` | ✘ | 关 | 兼容别名：等价于 `--norm=reversible` |
 | `--dry-run` | ✘ | 关 | **只体检不写盘**，打印问题项与修复项后退出（安全试跑） |
 | `--verify` | ✘ | 关 | 转换后接着做「HF 加载 + 与 tok-cli 的 piece 级 parity」 |
 | `--model` | ✘ | json 同目录同名 `.tkm` | 校验用的 `.tkm` |
@@ -141,7 +145,7 @@ E:\tokenizer_c\.venv\Scripts\python.exe tools\hf_pipeline.py verify --json model
 | 2 | `decoder_missing_bytefallback` | hard | `decoder` 链中无 `ByteFallback` | `decoder = Sequence[ByteFallback, Metaspace(prepend_scheme=never)]` |
 | 3 | `decoder_deprecated_add_prefix_space` | hard | `decoder` 使用已废弃的 `add_prefix_space` | 改用 `prepend_scheme=never` |
 | 4 | `pretokenizer_metaspace` | semantic | `pre_tokenizer` 缺失或不匹配 | `Metaspace(replacement="▁", prepend_scheme="never", split=false)` |
-| 5 | `normalizer_sequence` | semantic | `normalizer` 不是 `Sequence[NFKC, Replace(\s→" "), Replace(零宽族→"")]` | 按该三段式重建 |
+| 5 | `normalizer_sequence` | semantic | `normalizer` 与所选 `--norm` 期望链不一致（默认 `nfc` 期望 `Sequence[NFC, Replace(\s→" "), Replace(零宽族→"")]`；`nfkc` 期望 `Sequence[NFKC, ...]`） | 按所选模式的期望链重建 |
 | 6 | `null_scores` | hard | 有 N 条 piece 分数为 `null`/`NaN` | 改写为极小值 `-1e9`（`NAN_SCORE_REPLACEMENT`） |
 | 7 | `missing_byte_pieces` | semantic | 词表缺 `<0xXX>` 字节 piece | 补齐 256 个，分数 `-10.0`（对应 C 端 `kByteFallbackScore`，`src\tokenizer.c`） |
 | — | `byte_fallback_without_pieces` | semantic | `byte_fallback=true` 但字节 piece 数为 0（与 #7 互斥，属边界兜底） | 同上补 256 个，使两侧字节回退对称 |
@@ -163,6 +167,21 @@ ZERO_WIDTH_CLASS      = [\u200b-\u200f\u2028-\u202f\u2060\ufeff\u00ad]   # src\n
 ### 3.3 历史遗留 json 兼容
 
 `model.json` 若是老格式（顶层直接是 `{"vocab": [[piece, score], ...]}`，没有 `model` 骨架），`_normalize_input()` 会自动补出 `model = {type: "Unigram", byte_fallback: true, unk_id: 0, vocab: ...}`，保证老产物也能转换，无需手工改文件。
+
+### 3.4 归一化模式（`--norm`）与默认值变更（2026-10-16）
+
+| 模式 | normalizer 链 | 性质 | 与 C 侧比对 |
+|---|---|---|---|
+| `nfc`（**当前默认**） | `Sequence[NFC, Replace(\s→" "), Replace(零宽族→"")]` | 不做兼容折叠：全角标点/字母保持原样 | `tok-cli encode --norm=nfc` |
+| `nfkc`（兼容模式） | `Sequence[NFKC, Replace(\s→" "), Replace(零宽族→"")]` | 有损：全角→半角；与 2026-10-15 及更早产出逐字节一致 | `tok-cli encode`（老二进制内建 NFKC 默认） |
+| `reversible` | `Sequence[NFC, Replace([\t\n\r]→" ")]` | 可逆口径：保留全角/非 ASCII 空白与零宽字符，encode→decode 无损 | `tok-cli encode --norm=reversible` |
+
+变更要点（仅导出侧，C 侧算法语义零改动）：
+
+1. `tools\hf_export.py` 的 `DEFAULT_NORM_MODE` 由 `nfkc` 改为 `nfc`，`tools\hf_pipeline.py` 透传同一常量；`nfkc` / `reversible` 仍可经 `--norm` 显式指定（旧别名 `legacy` / `norm-reversible` 继续兼容）。
+2. C 侧比对参数只在「非 nfkc」时附加：`--norm=nfc` / `--norm=reversible` 会显式传给 `tok-cli encode`（判定用常量 `LEGACY_CLI_DEFAULT_NORM = "nfkc"` 保留老二进制内建默认的兼容语义，不再拿 `DEFAULT_NORM_MODE` 判断）。因此默认模式下请使用**支持 `--norm` 的 tok-cli**（`scripts\build.ps1` 的重建产物，如 `build_big3\tok-cli.exe`）；否则 verify 会降级为 `PASS_LOAD_ONLY`。
+3. `write_outputs()` 落盘的 `tokenizer_c_norm.json` sidecar 记录 `norm_mode` / `normalizer_types` / 完整 normalizer 与 `source_json`，供下游评测核对口径。
+4. 既有产物（`hf_export_big3`、`hf_export_big3_rev`）保留不删；新增 `hf_export_big3_nfc` 作为默认口径产物，见 §10.4。
 
 ---
 
@@ -194,6 +213,8 @@ ZERO_WIDTH_CLASS      = [\u200b-\u200f\u2028-\u202f\u2060\ufeff\u00ad]   # src\n
 | `--min-rounds` | `all` | — | 透传 `--min-rounds` |
 | `--tok-cli` | 全部 | `<repo>\build\tok-cli.exe` | C 侧可执行文件 |
 | `--model-type` | `all`/`export` | 取 json 值 | 覆盖 `model.type` |
+| `--norm` | `all`/`export`/`verify` | `nfc` | 归一化模式 `nfkc` / `nfc` / `reversible`（语义同 §3.4）；导出与自检共用同一模式 |
+| `--norm-reversible` | 全部 | 关 | 兼容别名：等价于 `--norm=reversible` |
 | `--verify-file` | `all`/`verify` | 内置 7 句探针 | 句表文件（每行一句） |
 | `--verify-tolerance` | `all`/`verify` | `0.02` | 用量偏差**提示**阈值，不参与判定 |
 | `--tmp-dir` | `all`/`verify` | `<workdir>\verify_tmp` | 自检临时目录（不写系统 temp） |
@@ -229,6 +250,7 @@ ZERO_WIDTH_CLASS      = [\u200b-\u200f\u2028-\u202f\u2060\ufeff\u00ad]   # src\n
 | `tokenizer.json` | `--out-dir` | **配置主体**：`version` / `added_tokens` / `normalizer` / `pre_tokenizer` / `post_processor` / `decoder` / `model`（含修复后的 vocab） | 53,742 B | 5,826,740 B |
 | `tokenizer_config.json` | `--out-dir` | `tokenizer_class=PreTrainedTokenizerFast`、四个 special token、`clean_up_tokenization_spaces=false` | 184 B | 184 B |
 | `special_tokens_map.json` | `--out-dir` | `unk_token=<unk>` / `bos_token=<s>` / `eos_token=</s>` / `pad_token=<pad>` | 95 B | 95 B |
+| `tokenizer_c_norm.json` | `--out-dir` | 归一化 sidecar：`generator` / `norm_mode` / `normalizer_types` / `normalizer` / `source_json` / `generated_at` / `note`（**不被 tokenizers / transformers 读取**，供下游评测核对口径） | — | 见 §10.4 |
 | `pipeline_manifest.json` | `<workdir>` | 编排器留痕：`command` / `started` / `finished` / `python` / `python_version` / `repo` / `tok_cli` / `workdir` / `model` / `json` / `out_dir` / `verify_tmp_dir` / `train` / `export` / `verify` / `exit_code` | 13,258 B | 6,355 B |
 
 `tokenizer.json` 顶层**只有** `ALLOWED_TOP_KEYS` 这 9 个键；`unk_token` 等 4 个键被搬到后两个文件——这正是 `AutoTokenizer.from_pretrained()` 期望的布局。
@@ -287,7 +309,7 @@ C 侧不可用（缺 .tkm 或 tok-cli）      → PASS_LOAD_ONLY   （只证明�
 |---|---|---|---|---|
 | **A. 剪枝 piece** | 源 json 中 `score=null` 的 piece 在转换后被写成 `-1e9`：HF 视其为可匹配，C 端视其为不可用（走字节回退，负 id） | C 侧 token 数明显多于 HF（`c_negative_ids` 大），piece 序列不同，但**还原文本一致**，且 C-sim 逐 piece 复现 | 小语料 7 句探针：5 句 | 已解释（`explained`） |
 | **B. Viterbi 同分** | 字节代价 `-10/字` 与某 piece 分数数值接近，两条路径总分相同，取的切分位置不同 | piece 序列不同、**还原文本一致**、两侧路径总分差 `≤1e-3` | 小语料 7 句探针：1 句（`emoji 😀🎉 与零宽...混合`） | 已解释（`tie_break`） |
-| **C. normalize 策略差异** | C 端 `src\normalize.c` 在可逆模式下**保留全角标点与零宽字符**（仅 ASCII 空白折成空格、零宽不剔除）；HF 侧 `normalizer` 固定为 `Sequence[NFKC, Replace(\s→" "), Replace(零宽族→"")]`，NFKC 会做兼容折叠并**剔除零宽族** | 两侧还原文本不同 → `lost_text`；或文本相同但切分不同 → `unexplained` | 见 7.2 逐码点探针 | **部分已解释、部分未解释（见下）** |
+| **C. normalize 策略差异** | C 端 `src\normalize.c` 在可逆模式下**保留全角标点与零宽字符**（仅 ASCII 空白折成空格、零宽不剔除）；HF 侧 `normalizer` 由导出时的 `--norm` 决定：`nfkc`（2026-10-16 之前的默认）做兼容折叠并**剔除零宽族**，`nfc`（**当前默认**）不做兼容折叠但同样剔除零宽族，`reversible` 则与 C 端可逆口径对齐 | 两侧还原文本不同 → `lost_text`；或文本相同但切分不同 → `unexplained` | 见 7.2 逐码点探针（nfkc × 可逆模式对照） | **部分已解释、部分未解释（见下）** |
 
 ### 7.2 normalize 差异的逐码点探针（model_big2）
 
@@ -319,6 +341,8 @@ C 侧不可用（缺 .tkm 或 tok-cli）      → PASS_LOAD_ONLY   （只证明�
 | 空白族混排 `U+3000 / U+00A0 / U+202F / U+2000 / U+2009` 同句（如 `：` + 5 种空白 + `X`） | `[':▁','▁▁','▁▁','<0x58>']`（7 token，总分 `-49.7451`） | `[':','▁▁','▁▁','▁X']`（7 token，总分 `-50.0064`） | **token 数相同、还原文本一致**（`:     X`），但 `▁` 前缀归属不同；C-sim **未复现**，路径总分不等（差 0.26），故判 `unexplained` |
 
 该条是**当前唯一未解释项**：不是剪枝机制、不是同分，也不损失文本，属 C/HF 在"多种 Unicode 空白折叠后 `▁` 词边界标记归属"上的实现差异。单字符逐个测试时（`U+3000` 单独、ASCII 空格）两侧一致，只有在**多空白混排**时才出现，用户侧不影响语义（token 数与文本都一致）。
+
+> **口径说明（2026-10-16 起）**：§7.1 / §7.2 的对照实验是在导出默认 `nfkc`（`model_big2`）下做的。默认改为 `nfc` 后，「全角→半角」这类 `lost_text` 不再产生；`U+00AD / U+200E / U+200F / U+2060` 等零宽族在 `nfc` 下仍被剔除（与 `nfkc` 同，因为 `nfc` 链同样含「零宽族→空」替换），只有显式 `--norm=reversible` 才与 C 端可逆口径完全对齐。探针回归的实测对照见 §10.4。
 
 ### 7.3 处置建议
 
@@ -435,6 +459,30 @@ E:\tokenizer_c\.venv\Scripts\python.exe tools\hf_pipeline.py verify ^
 
 这组数字是"剪枝 piece 机制足以解释 C/HF 差异"的**聚合级证据**：把剪枝 piece 从 HF 词表移除后，两侧 token 数几乎完全贴合（差 2 个 token / 8,216，即 0.0243%），剩余 1 行差异即 §7.3 的 `unexplained` 空白折叠项。
 
+### 10.4 默认归一化模式改为 NFC 后的重新导出与验证（2026-10-16）
+
+- **变更范围**：`tools\hf_export.py` 的 `DEFAULT_NORM_MODE` 由 `nfkc` 改为 `nfc`，`tools\hf_pipeline.py` 透传同一常量；`nfkc` / `reversible` 仍可经 `--norm` 显式指定（§3.4）。C 侧算法与 `src\` 零改动。
+- **改动前备份**：`temp\backup\orig_20261016_nfc\`（`hf_export.py` / `hf_pipeline.py` / `hf_export_pipeline.md`）。
+- **重新导出**：
+
+  ```powershell
+  python tools\hf_export.py --json model_big3.json --out hf_export_big3_nfc --verify --tok-cli build_big3\tok-cli.exe
+  ```
+
+  产物 `hf_export_big3_nfc\`：`tokenizer.json`（5,822,085 B）、`tokenizer_config.json`、`special_tokens_map.json`、`tokenizer_c_norm.json`（806 B）。既有 `hf_export_big3`（nfkc）、`hf_export_big3_rev`（reversible）**保留未删**。
+- **verify 结论**：`PASS_IDENTICAL`（7/7 identical，`worst_delta = 0.0000%`，`normalizer match = True`，传给 tok-cli 的模式参数为 `--norm=nfc`），报告见 `build\hf_export_big3_nfc_verify.json`。
+- **探针回归**（19 子类 / 76 样本，`benchmark\probe_regression.py --tokenizer hf_export_big3_nfc --norm-mode nfc`）：fidelity 0.9605（73/76 通过）、micro_fertility 2.4568、micro_byte 0.3385、gini 0.1284、composite 54.87；3 条失败全部落在 `whitespace_control`（tab 折空格，与 `reversible` 同因）；与 `nfc` 基线槽 diff 为「**劣化 0 项**」。
+- **模式对照（同一语料、同一模型 `model_big3`）**：
+
+  | 导出物 | 模式 | fidelity | composite | 说明 |
+  |---|---|---|---|---|
+  | `hf_export_big3_nfc`（**新默认**） | nfc | **0.9605**（73/76） | 54.87 | 无「全角→半角」兼容折叠损失 |
+  | `hf_export_big3`（旧默认） | nfkc | 0.9211（70/76） | 54.03 | 兼容折叠导致额外 3 条失败 |
+  | `hf_export_big3_rev` | reversible | 0.9605（73/76） | 54.87 | 与 nfc 实测一致 |
+
+- **门禁现状**：`fairness_gini ≤ 0.11`（实测 0.1284）与 `composite_score ≥ 60`（实测 54.87）两项仍 FAIL，与 `nfkc` / `reversible` 基线同源，属已知未达标项，非本次变更引入。
+- **评测侧同步**：`benchmark\thresholds.json` 的 `calibrated_by.probe_tokenizers` 已补入 `hf_export_big3_nfc`，并由 `benchmark\gen_thresholds_doc.py` 重新生成 `docs\eval_thresholds.md`（`--check` 通过）；`benchmark\probe_baseline.json` 新增 `nfc` 槽位，原有 `nfkc` / `reversible` 槽位保留。
+
 ---
 
 ## 11. 现场保护与已知瑕疵
@@ -443,4 +491,5 @@ E:\tokenizer_c\.venv\Scripts\python.exe tools\hf_pipeline.py verify ^
 - **已知瑕疵（未改动，遵守"不改既有文件"约束）**：`hf_export.py` 中 `--verify-file` 的帮助文本写作"缺省用内置 6 句"，实际内置 `DEFAULT_SENTENCES` 为 **7 条**。行为以代码常量为准。
 - **依赖提示**：校验段依赖 `tokenizers` + `transformers`（实测 0.23.3 / 5.19.0）；转换段除标准库外不依赖第三方包（C-sim 反证才 import `tokenizers`）。运行期 `PyTorch was not found` 提示可忽略。
 - **环境踩坑提醒（复现时注意）**：外部 shell 工具对 stderr / 超长 stdout 存在截断，`$LASTEXITCODE` 可能取不到；排障时**优先看脚本自写的日志文件与 `pipeline_manifest.json`**，不要只依赖终端回显。
+*（内容由AI生成，仅供参考）*
 *（内容由AI生成，仅供参考）*

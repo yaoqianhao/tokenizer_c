@@ -26,7 +26,7 @@ tokenizer-c 是一个从零实现的 Unigram 分词器：
 - **归一化**：完整 NFKC（Unicode UAX #15：规范/兼容分解、组合排序、重组）+ 可选 ASCII 大小写折叠 + 扩展钩子；
 - **序列化**：自定义二进制模型格式 `TKCZ`、HF 风格 `tokenizer.json` 导出、**SentencePiece `.model`（protobuf 线格式）导出/加载**；
 - **对外形态**：C API（`include/tokenizer.h`）与命令行程序 `tok-cli`；
-- **质量保障**：`tests/test_tokenizer.c` 95 项检查（当前全部通过）。
+- **质量保障**：`tests/` 下三组用例全绿 —— `test_tokenizer` 186 项、`test_tiktoken_bpe` 97 项、`test_cli_tt_raw` 15 项检查（`ctest` 3 项）。
 
 ## 2. 功能总览
 
@@ -38,8 +38,9 @@ tokenizer-c 是一个从零实现的 Unigram 分词器：
 | **归一化** | 完整 NFKC（UAX #15）+ `▁` 空格标记 + 可选 ASCII 大小写折叠 + 定制归一化钩子 |
 | **序列化** | 自定义二进制模型格式 `TKCZ` + HF 风格 JSON 导出 + **SentencePiece `.model`（protobuf）导出/加载** |
 | **C API** | `tokenizer.h`：load / encode / decode / normalize / train / export_json / export_sentencepiece / load_sentencepiece 等 |
-| **示例 CLI** | `tok-cli`：`train` / `encode` / `decode` 三个子命令 |
-| **单元测试** | `tests/test_tokenizer.c` 95 项检查（训练、往返、字节回退、内存加载、越界拒绝、SP 往返、NFKC 映射等） |
+| **tiktoken 兼容 BPE** | `src/tiktoken_bpe.c` + `include/tiktoken_bpe.h`：byte-level BPE encoder/decoder（rank 即 id、字节级合并、近似预切分、special token、`decode` 与 `decode_bytes` 双出口），规格见 `docs/ttbpe_spec.md` |
+| **示例 CLI** | `tok-cli`：`train` / `encode` / `decode` + tiktoken 兼容 `tt-encode` / `tt-decode` / `tt-split` / `tt-info` |
+| **测试** | `tests/test_tokenizer.c` 186 项检查（训练、往返、字节回退、内存加载、越界拒绝、SP 往返、NFKC 映射等）；`tests/test_tiktoken_bpe.c` 97 项；`tests/test_cli_tt_raw.c` 15 项（CLI `--raw` 字节回归） |
 
 ## 3. 目录结构
 
@@ -50,7 +51,8 @@ tokenizer-c/
 ├── train_big.bat                        # 海量语料训练批处理（断点续训版）
 ├── 2026-10-09-tokenizer-design.md       # 设计文档（架构/算法/接口/里程碑）
 ├── include/
-│   └── tokenizer.h                      # 公开 C API 头文件
+│   ├── tokenizer.h                      # 公开 C API 头文件
+│   └── tiktoken_bpe.h                   # tiktoken 兼容 BPE 模块公开 API
 ├── src/                                 # 库源码（编译为 libtokenizer.a）
 │   ├── tokenizer_internal.h             # 内部结构体与内部声明
 │   ├── utf8.c / utf8.h                  # UTF-8 解码/编码（畸形字节按原始字节处理）
@@ -60,20 +62,38 @@ tokenizer-c/
 │   ├── tokenizer.c                      # 生命周期 / encode(Viterbi DP) / decode / 字节回退
 │   ├── model.c                          # TKCZ 二进制读写
 │   ├── sentencepiece.c                  # SentencePiece ModelProto 序列化/解析 + JSON 导出
-│   └── trainer.c                        # Unigram 训练（种子词表 / EM / 剪枝 / checkpoint）
+│   ├── trainer.c                        # Unigram 训练（种子词表 / EM / 剪枝 / checkpoint）
+│   └── tiktoken_bpe.c                   # tiktoken 兼容 byte-level BPE（词表加载 / 编码 / 解码，自包含无第三方依赖）
 ├── cli/
-│   └── main.c                           # tok-cli 命令行入口（train / encode / decode）
+│   └── main.c                           # tok-cli 命令行入口（train / encode / decode + tt-*）
 ├── tests/
-│   ├── test_tokenizer.c                 # 单元与集成测试（95 项检查）
+│   ├── test_tokenizer.c                 # 单元与集成测试（186 项检查）
+│   ├── test_tiktoken_bpe.c              # tiktoken 兼容 BPE 模块测试（97 项检查）
+│   ├── test_cli_tt_raw.c                # CLI `tt-decode --raw` 字节级回归（15 项检查）
 │   ├── dbg_norm.c                       # 归一化调试小工具
 │   └── dbg_trie.c                       # Trie 调试小工具
 ├── scripts/
 │   ├── build.ps1                        # Windows 构建脚本（CMake 或纯 gcc）
 │   ├── gen_nfkc_tables.py               # 从 Unicode 数据生成 nfkc_tables.inc
 │   └── split_corpus.py                  # 语料按语言分类切分
+├── docs/                                # 规格 / 口径 / 流程文档（索引入口见 docs/README.md）
+│   ├── README.md                        # 文档索引（全仓库文档导航）
+│   ├── ttbpe_spec.md                    # tiktoken 兼容 BPE 模块规格（被 tiktoken_bpe.h/.c 引用）
+│   ├── tokenizer_evaluation_standard.md # 评测口径与验收标准
+│   ├── eval_thresholds.md               # 阈值门禁表（由 benchmark/gen_thresholds_doc.py 生成，勿手改）
+│   └── hf_export_pipeline.md            # HuggingFace fast tokenizer 导出流水线说明
+├── tools/                               # 模型导出 / 审计工具
+│   ├── hf_export.py                     # 模型 JSON -> HF fast tokenizer 目录
+│   ├── hf_pipeline.py                   # 训练 -> 导出 -> 自检 端到端流水线
+│   └── byte_offsets.py                  # byte-fallback token 的 offset span 标准化与审计
 ├── benchmark/                           # 大规模压测与评测
 │   ├── gen_corpus.py / download_corpus.py # 多语言语料生成/下载
 │   ├── eval_metrics.py                  # 评测脚本（BPT/还原率/稳定性/OOV/TokEval/吞吐）
+│   ├── eval_thresholds.py               # 阈值与指标口径单点化共享模块（eval_metrics / probe_regression 共用）
+│   ├── gen_thresholds_doc.py            # 由 thresholds.json 生成 docs/eval_thresholds.md
+│   ├── clean_corpus.py                  # 语料去污染（AI 声明行/样板头/控制字符/超短行，默认 dry-run）
+│   ├── probe_regression.py              # 19 子类探针语料分层回归（指标 diff，基线 probe_baseline.json）
+│   ├── thresholds.json / probe_baseline.json # 阈值门禁与探针基线（单一事实来源）
 │   ├── run_bench.ps1 / bench_enc.c      # 压测运行脚本 / 编码吞吐压测源码
 │   ├── corpus/                          # 评测语料（en/zh/code 子目录）
 │   ├── model_256k.tkm / model_small256k.tkm # 训练好的模型（产物）
@@ -92,7 +112,7 @@ tokenizer-c/
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release
-ctest --test-dir build          # 运行单元测试
+ctest --test-dir build          # 运行全部测试（tokenizer_unit / tiktoken_bpe_unit / cli_tt_raw）
 ```
 
 ### 方式二：纯 gcc（Windows 可在 MSYS2/MinGW 下执行）
@@ -103,7 +123,8 @@ gcc -std=c11 -O2 -Wall -Wextra -I../include -I../src -c ../src/*.c
 ar rcs libtokenizer.a *.o
 gcc -std=c11 -O2 -I../include ../cli/main.c libtokenizer.a -lm -o tok-cli
 gcc -std=c11 -O2 -I../include ../tests/test_tokenizer.c libtokenizer.a -lm -o test_tokenizer
-./test_tokenizer
+gcc -std=c11 -O2 -I../include ../tests/test_tiktoken_bpe.c libtokenizer.a -lm -o test_tiktoken_bpe
+./test_tokenizer && ./test_tiktoken_bpe
 ```
 
 ### 方式三：Windows PowerShell 脚本
@@ -113,7 +134,7 @@ gcc -std=c11 -O2 -I../include ../tests/test_tokenizer.c libtokenizer.a -lm -o te
 .\scripts\build.ps1 -Gcc   # 纯 gcc
 ```
 
-**产物**：`build/tok-cli.exe`、`build/test_tokenizer.exe`、`build/libtokenizer.a`（Windows 下额外链接 shell32）。
+**产物**：`build/tok-cli.exe`、`build/test_tokenizer.exe`、`build/test_tiktoken_bpe.exe`、`build/test_cli_tt_raw.exe`、`build/libtokenizer.a`（Windows 下额外链接 shell32）。
 
 ## 5. 快速上手
 
@@ -139,7 +160,7 @@ tok-cli decode --model model.tkm --ids "1 2 3 4 5"
 
 ## 6. CLI 用法
 
-命令总览：`tok-cli <train|encode|decode> [options]`，运行 `tok-cli --help` 查看完整参数。
+命令总览：`tok-cli <train|encode|decode|tt-encode|tt-decode|tt-split|tt-info> [options]`，运行 `tok-cli --help` 查看完整参数；tiktoken 兼容子命令见 §6.7。
 
 ### 6.1 train —— 训练模型
 
@@ -239,6 +260,34 @@ tok-cli decode --model model.tkm --ids "1,2,3,4,5"
 ```
 
 输出：还原后的 UTF-8 文本（id 支持空格或逗号分隔）。
+
+### 6.7 tiktoken 兼容子命令（tt-encode / tt-decode / tt-split / tt-info）
+
+用于与本工程 Unigram 分词器做**同口径对照**：直接加载 tiktoken 格式词表（`.tiktoken` 每行一个 base64，或含 `regular_tokens` / `special_tokens` 的 Grok 风格 `.tok.json`），按 tiktoken 语义编码 / 解码。完整规格见 `docs/ttbpe_spec.md`。
+
+| 子命令 | 作用 | 主要参数 |
+|---|---|---|
+| `tt-encode` | 文本 -> id 序列（默认等价 tiktoken `encode(allowed_special=set(), disallowed_special="all")`） | `--vocab <file>`；`--text <s>` 或 `--file <path>`；`--split none\|gpt2\|cl100k`（也支持 `--split=<mode>`，默认 cl100k）；`--ordinary`；`--allow-special`；`--special <token>`（可重复）；`--repeat <n>`；`--ids-only` |
+| `tt-decode` | id 序列 -> 文本 / 原始字节 | `--vocab <file>`；`--ids "1,2,3"`（空格或逗号分隔）；`--raw` |
+| `tt-split` | 查看预切分（pre-tokenize）结果 | `--vocab <file>`；`--text <s>` 或 `--file <path>`；`--split=<mode>` |
+| `tt-info` | 打印词表元信息（格式、规模、special token、默认切分模式） | `--vocab <file>` |
+
+```bash
+# 编码（stdout 为空格分隔的 id，stderr 为统计行）
+tok-cli tt-encode --vocab tokenizer.tiktoken --text "hello world"
+tok-cli tt-encode --vocab tokenizer.tiktoken --file input.txt --split gpt2 --ids-only
+
+# 解码：--raw 输出原始字节（不追加换行、不做换行转换）；不加 --raw 输出 UTF-8 文本
+tok-cli tt-decode --vocab tokenizer.tiktoken --ids "256 257" --raw
+
+# 预切分与词表信息
+tok-cli tt-split --vocab tokenizer.tiktoken --text "hello world"
+tok-cli tt-info  --vocab tokenizer.tiktoken
+```
+
+- **`--raw` 语义**：只把 `ttbpe_decode_bytes()` 的原始字节写到 stdout，**不追加换行、不做文本模式转换**，因此可与 tiktoken `Encoding.decode_bytes()` 逐字节对比（回归用例 `tests/test_cli_tt_raw.c`）。
+- **special token 默认拒绝**：文本中出现未通过 `--special` / `--allow-special` 放行的 special token 时，`tt-encode` 报错而非静默编码（对应 tiktoken `disallowed_special="all"`）；`--allow-special` 放行全部。
+- **预切分是近似实现**：纯 ASCII 输入与 Python `regex.findall` 完全一致；非 ASCII 输入受简化字符类影响存在差异，详见 `docs/ttbpe_spec.md` 第 5 节。
 
 ## 7. 算法说明
 
@@ -450,10 +499,18 @@ ctest --test-dir build
 **方式二：直接运行测试可执行文件**
 
 ```bash
-build\test_tokenizer.exe      # 或 build3\test_tokenizer.exe（手工 gcc 版本）
+build\test_tokenizer.exe                      # 或 build3\test_tokenizer.exe（手工 gcc 版本）
+build\test_tiktoken_bpe.exe
+build\test_cli_tt_raw.exe build\tok-cli.exe   # CLI 字节回归需传入 tok-cli 路径
 ```
 
-测试内容：`tests/test_tokenizer.c` 共 95 项检查，覆盖训练、encode/decode 往返、字节回退、内存加载、越界拒绝、SentencePiece `.model` 往返、NFKC 映射等。全部通过时输出 `OK: all 95 checks passed`。
+| 用例 | 检查项 | 全部通过时输出 |
+|---|---|---|
+| `tests/test_tokenizer.c` | 186 | `OK: all 186 checks passed` |
+| `tests/test_tiktoken_bpe.c` | 97 | `97 checks, 0 failures -> PASS` |
+| `tests/test_cli_tt_raw.c` | 15 | `15 checks, 0 failures -> PASS` |
+
+覆盖面：`test_tokenizer` 覆盖训练、encode/decode 往返、字节回退、内存加载、越界拒绝、SentencePiece `.model` 往返、NFKC 映射等；`test_tiktoken_bpe` 覆盖 tiktoken 词表加载（两种格式）、rank 即 id 的字节级合并、special token、`decode` / `decode_bytes` 与各预切分模式；`test_cli_tt_raw` 覆盖 CLI 层 `tt-decode --raw` 的字节级输出（运行期自建迷你 `.tiktoken` 词表，不依赖仓库内大模型产物）。
 
 ## 12. 已知限制
 
@@ -553,14 +610,20 @@ python benchmark\eval_metrics.py ^
 | 迭代 | 状态 | 内容 |
 |---|---|---|
 | v1.0（初始） | 完成 | 纯 C 工程骨架、Unigram 训练器、推理引擎、TKCZ/JSON、C API、CLI、测试 |
-| v1.1 方向1：SentencePiece proto 兼容 | 完成 | `src/sentencepiece.c`：`.model` 导出/加载 + HF 风格 `tokenizer.json`；95/95 检查通过 |
-| v1.1 方向2：完整 NFKC | 完成 | `src/nfkc.c` + `src/nfkc_tables.inc`（UAX #15 分解/排序/重组）；95/95 检查通过 |
+| v1.1 方向1：SentencePiece proto 兼容 | 完成 | `src/sentencepiece.c`：`.model` 导出/加载 + HF 风格 `tokenizer.json`；测试全绿（当时 95 项） |
+| v1.1 方向2：完整 NFKC | 完成 | `src/nfkc.c` + `src/nfkc_tables.inc`（UAX #15 分解/排序/重组）；测试全绿（当时 95 项） |
 | v1.1 方向3：256K 大规模压测 | 完成 | 256K 词表多语言压测：10 轮 EM 收敛（约 2.75h）；Trie 叶节点 id 升级 32-bit；评测报告 `benchmark/eval_report_2026-10-10.{json,md}` |
 | v1.2：SP 基线补测与多厂商对比 | 完成 | 官方 SP 262144 同口径基线补测（§13.2）；五家厂商 tokenizer 横向评测（§13.3，报告见 benchmark/） |
 | v1.3：3.28GB 海量语料训练 | 进行中 | `train_big.bat` 一键训练 256K 词表（`iters=8  shrink=60`，含断点续训），产物 `model_big.tkm` / `model_big.json` / `model_big.ckpt` |
+| v1.4：工程结构评审改进 | 完成 | 修复 `CMakeLists.txt` 混入的裸文本与 `build.ps1 -Gcc` 漏编 `src/tiktoken_bpe.c`；tiktoken 规格落位 `docs/ttbpe_spec.md`；新增文档索引 `docs/README.md`；README 与实际对齐；新增 CLI `tt-decode --raw` 字节回归用例（`ctest` 3 项全绿，186 + 97 + 15 项检查） |
 
 ## 16. 相关文档
 
+- `docs/README.md`：**文档索引**（docs/ 与仓库其它位置文档的导航入口）
+- `docs/ttbpe_spec.md`：tiktoken 兼容 BPE 模块规格（被 `include/tiktoken_bpe.h` / `src/tiktoken_bpe.c` 引用）
+- `docs/tokenizer_evaluation_standard.md`：评测口径与验收标准
+- `docs/eval_thresholds.md`：阈值门禁表（由 `benchmark/gen_thresholds_doc.py` 从 `benchmark/thresholds.json` 生成，勿手改）
+- `docs/hf_export_pipeline.md`：HuggingFace fast tokenizer 导出流水线
 - `2026-10-09-tokenizer-design.md`：设计文档（需求、架构、算法、接口、里程碑、验证标准）
 - `2026-10-11-code-review-fix-plan.md`：代码审阅与修改建议（P0–P2 问题清单、分批改法、回归清单）
 - `benchmark/eval_report_2026-10-10.md`：256K 模型评测报告

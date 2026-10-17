@@ -1,0 +1,579 @@
+{
+  "schema": "probe_baseline/2",
+  "modes": {
+    "reversible": {
+      "label": "big3_rev",
+      "tokenizer": "E:\\tokenizer_c\\hf_export_big3_rev\\tokenizer.json",
+      "corpus_dir": "E:\\tokenizer_c\\benchmark\\corpus_probe_clean\\builtin",
+      "norm_mode": "reversible",
+      "agg": {
+        "samples_evaluated": 76,
+        "fidelity_pass": 73,
+        "micro_fidelity_pass_rate": 0.9605263157894737,
+        "micro_fertility": 2.4568062827225132,
+        "micro_byte_compression": 0.33850315599639313,
+        "macro_fertility": 3.5837696785060893,
+        "fairness_gini": 0.12838168015625984,
+        "composite_score": 54.87,
+        "subcategories": 19
+      },
+      "rows": [
+        {
+          "category": "edge_cases",
+          "subcategory": "long_tokens",
+          "fertility": 16.5,
+          "byte_compression": 0.23076923076923078,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 15.5,
+          "continued_word_rate": 1.0
+        },
+        {
+          "category": "edge_cases",
+          "subcategory": "mixed_scripts",
+          "fertility": 1.7380952380952381,
+          "byte_compression": 0.31063829787234043,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 0.4523809523809524,
+          "continued_word_rate": 0.23809523809523808
+        },
+        {
+          "category": "edge_cases",
+          "subcategory": "whitespace_control",
+          "fertility": 1.6,
+          "byte_compression": 0.25806451612903225,
+          "fidelity_pass_rate": 0.25,
+          "subword_fertility": 0.13333333333333333,
+          "continued_word_rate": 0.0
+        },
+        {
+          "category": "human_languages",
+          "subcategory": "arabic",
+          "fertility": 3.973684210526316,
+          "byte_compression": 0.3700980392156863,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 2.8421052631578947,
+          "continued_word_rate": 0.8421052631578947
+        },
+        {
+          "category": "human_languages",
+          "subcategory": "chinese",
+          "fertility": 1.2,
+          "byte_compression": 0.37209302325581395,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 0.0,
+          "continued_word_rate": 0.1125
+        },
+        {
+          "category": "human_languages",
+          "subcategory": "english",
+          "fertility": 1.4210526315789473,
+          "byte_compression": 0.20532319391634982,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 0.2631578947368421,
+          "continued_word_rate": 0.10526315789473684
+        },
+        {
+          "category": "human_languages",
+          "subcategory": "german",
+          "fertility": 2.25,
+          "byte_compression": 0.2977941176470588,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 1.2777777777777777,
+          "continued_word_rate": 0.4166666666666667
+        },
+        {
+          "category": "human_languages",
+          "subcategory": "hindi",
+          "fertility": 5.565217391304348,
+          "byte_compression": 0.3950617283950617,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 4.108695652173913,
+          "continued_word_rate": 0.8695652173913043
+        },
+        {
+          "category": "human_languages",
+          "subcategory": "japanese",
+          "fertility": 1.25,
+          "byte_compression": 0.391156462585034,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 0.0,
+          "continued_word_rate": 0.15217391304347827
+        },
+        {
+          "category": "human_languages",
+          "subcategory": "korean",
+          "fertility": 1.5057471264367817,
+          "byte_compression": 0.4517241379310345,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 0.0,
+          "continued_word_rate": 0.22988505747126436
+        },
+        {
+          "category": "human_languages",
+          "subcategory": "russian",
+          "fertility": 3.3870967741935485,
+          "byte_compression": 0.23755656108597284,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 2.3870967741935485,
+          "continued_word_rate": 0.8709677419354839
+        },
+        {
+          "category": "programming_languages",
+          "subcategory": "javascript",
+          "fertility": 3.0,
+          "byte_compression": 0.27181208053691275,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 1.5555555555555556,
+          "continued_word_rate": 0.2962962962962963
+        },
+        {
+          "category": "programming_languages",
+          "subcategory": "python",
+          "fertility": 2.0285714285714285,
+          "byte_compression": 0.27626459143968873,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 0.8857142857142857,
+          "continued_word_rate": 0.22857142857142856
+        },
+        {
+          "category": "programming_languages",
+          "subcategory": "rust",
+          "fertility": 3.0,
+          "byte_compression": 0.319672131147541,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 1.5769230769230769,
+          "continued_word_rate": 0.5769230769230769
+        },
+        {
+          "category": "programming_languages",
+          "subcategory": "sql",
+          "fertility": 1.65625,
+          "byte_compression": 0.2541966426858513,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 0.4375,
+          "continued_word_rate": 0.234375
+        },
+        {
+          "category": "scientific_formulas",
+          "subcategory": "algebra",
+          "fertility": 2.0,
+          "byte_compression": 0.32967032967032966,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 0.8222222222222222,
+          "continued_word_rate": 0.3333333333333333
+        },
+        {
+          "category": "scientific_formulas",
+          "subcategory": "calculus",
+          "fertility": 6.875,
+          "byte_compression": 0.5288461538461539,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 5.625,
+          "continued_word_rate": 0.875
+        },
+        {
+          "category": "scientific_formulas",
+          "subcategory": "physics",
+          "fertility": 3.090909090909091,
+          "byte_compression": 0.4689655172413793,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 1.9545454545454546,
+          "continued_word_rate": 0.5
+        },
+        {
+          "category": "scientific_formulas",
+          "subcategory": "statistics",
+          "fertility": 6.05,
+          "byte_compression": 0.5654205607476636,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 4.6,
+          "continued_word_rate": 0.8
+        }
+      ],
+      "generated_at": "2026-10-16T20:21:52"
+    },
+    "nfkc": {
+      "label": "big3_nfkc",
+      "tokenizer": "E:\\tokenizer_c\\hf_export_big3\\tokenizer.json",
+      "corpus_dir": "E:\\tokenizer_c\\benchmark\\corpus_probe_clean\\builtin",
+      "norm_mode": "nfkc",
+      "agg": {
+        "samples_evaluated": 76,
+        "fidelity_pass": 70,
+        "micro_fidelity_pass_rate": 0.9210526315789473,
+        "micro_fertility": 2.4489528795811517,
+        "micro_byte_compression": 0.33742110009017134,
+        "macro_fertility": 3.5786318338945606,
+        "fairness_gini": 0.12964943154675423,
+        "composite_score": 54.03,
+        "subcategories": 19
+      },
+      "rows": [
+        {
+          "category": "edge_cases",
+          "subcategory": "long_tokens",
+          "fertility": 16.5,
+          "byte_compression": 0.23076923076923078,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 15.5,
+          "continued_word_rate": 1.0
+        },
+        {
+          "category": "edge_cases",
+          "subcategory": "mixed_scripts",
+          "fertility": 1.6904761904761905,
+          "byte_compression": 0.3021276595744681,
+          "fidelity_pass_rate": 0.75,
+          "subword_fertility": 0.4523809523809524,
+          "continued_word_rate": 0.23809523809523808
+        },
+        {
+          "category": "edge_cases",
+          "subcategory": "whitespace_control",
+          "fertility": 1.6,
+          "byte_compression": 0.25806451612903225,
+          "fidelity_pass_rate": 0.25,
+          "subword_fertility": 0.13333333333333333,
+          "continued_word_rate": 0.0
+        },
+        {
+          "category": "human_languages",
+          "subcategory": "arabic",
+          "fertility": 3.973684210526316,
+          "byte_compression": 0.3700980392156863,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 2.8421052631578947,
+          "continued_word_rate": 0.8421052631578947
+        },
+        {
+          "category": "human_languages",
+          "subcategory": "chinese",
+          "fertility": 1.15,
+          "byte_compression": 0.35658914728682173,
+          "fidelity_pass_rate": 0.5,
+          "subword_fertility": 0.0,
+          "continued_word_rate": 0.125
+        },
+        {
+          "category": "human_languages",
+          "subcategory": "english",
+          "fertility": 1.4210526315789473,
+          "byte_compression": 0.20532319391634982,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 0.2631578947368421,
+          "continued_word_rate": 0.10526315789473684
+        },
+        {
+          "category": "human_languages",
+          "subcategory": "german",
+          "fertility": 2.25,
+          "byte_compression": 0.2977941176470588,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 1.2777777777777777,
+          "continued_word_rate": 0.4166666666666667
+        },
+        {
+          "category": "human_languages",
+          "subcategory": "hindi",
+          "fertility": 5.565217391304348,
+          "byte_compression": 0.3950617283950617,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 4.108695652173913,
+          "continued_word_rate": 0.8695652173913043
+        },
+        {
+          "category": "human_languages",
+          "subcategory": "japanese",
+          "fertility": 1.25,
+          "byte_compression": 0.391156462585034,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 0.0,
+          "continued_word_rate": 0.15217391304347827
+        },
+        {
+          "category": "human_languages",
+          "subcategory": "korean",
+          "fertility": 1.5057471264367817,
+          "byte_compression": 0.4517241379310345,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 0.0,
+          "continued_word_rate": 0.22988505747126436
+        },
+        {
+          "category": "human_languages",
+          "subcategory": "russian",
+          "fertility": 3.3870967741935485,
+          "byte_compression": 0.23755656108597284,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 2.3870967741935485,
+          "continued_word_rate": 0.8709677419354839
+        },
+        {
+          "category": "programming_languages",
+          "subcategory": "javascript",
+          "fertility": 3.0,
+          "byte_compression": 0.27181208053691275,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 1.5555555555555556,
+          "continued_word_rate": 0.2962962962962963
+        },
+        {
+          "category": "programming_languages",
+          "subcategory": "python",
+          "fertility": 2.0285714285714285,
+          "byte_compression": 0.27626459143968873,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 0.8857142857142857,
+          "continued_word_rate": 0.22857142857142856
+        },
+        {
+          "category": "programming_languages",
+          "subcategory": "rust",
+          "fertility": 3.0,
+          "byte_compression": 0.319672131147541,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 1.5769230769230769,
+          "continued_word_rate": 0.5769230769230769
+        },
+        {
+          "category": "programming_languages",
+          "subcategory": "sql",
+          "fertility": 1.65625,
+          "byte_compression": 0.2541966426858513,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 0.4375,
+          "continued_word_rate": 0.234375
+        },
+        {
+          "category": "scientific_formulas",
+          "subcategory": "algebra",
+          "fertility": 2.0,
+          "byte_compression": 0.32967032967032966,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 0.8222222222222222,
+          "continued_word_rate": 0.3333333333333333
+        },
+        {
+          "category": "scientific_formulas",
+          "subcategory": "calculus",
+          "fertility": 6.875,
+          "byte_compression": 0.5288461538461539,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 5.625,
+          "continued_word_rate": 0.875
+        },
+        {
+          "category": "scientific_formulas",
+          "subcategory": "physics",
+          "fertility": 3.090909090909091,
+          "byte_compression": 0.4689655172413793,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 1.9545454545454546,
+          "continued_word_rate": 0.5
+        },
+        {
+          "category": "scientific_formulas",
+          "subcategory": "statistics",
+          "fertility": 6.05,
+          "byte_compression": 0.5654205607476636,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 4.6,
+          "continued_word_rate": 0.8
+        }
+      ],
+      "generated_at": "2026-10-16T20:22:52"
+    },
+    "nfc": {
+      "label": "big3_nfc",
+      "tokenizer": "E:\\tokenizer_c\\hf_export_big3_nfc",
+      "corpus_dir": "E:\\tokenizer_c\\benchmark\\corpus_probe_clean\\builtin",
+      "norm_mode": "nfc",
+      "agg": {
+        "samples_evaluated": 76,
+        "fidelity_pass": 73,
+        "micro_fidelity_pass_rate": 0.9605263157894737,
+        "micro_fertility": 2.4568062827225132,
+        "micro_byte_compression": 0.33850315599639313,
+        "macro_fertility": 3.5837696785060893,
+        "fairness_gini": 0.12838168015625984,
+        "composite_score": 54.87,
+        "subcategories": 19
+      },
+      "rows": [
+        {
+          "category": "edge_cases",
+          "subcategory": "long_tokens",
+          "fertility": 16.5,
+          "byte_compression": 0.23076923076923078,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 15.5,
+          "continued_word_rate": 1.0
+        },
+        {
+          "category": "edge_cases",
+          "subcategory": "mixed_scripts",
+          "fertility": 1.7380952380952381,
+          "byte_compression": 0.31063829787234043,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 0.4523809523809524,
+          "continued_word_rate": 0.23809523809523808
+        },
+        {
+          "category": "edge_cases",
+          "subcategory": "whitespace_control",
+          "fertility": 1.6,
+          "byte_compression": 0.25806451612903225,
+          "fidelity_pass_rate": 0.25,
+          "subword_fertility": 0.13333333333333333,
+          "continued_word_rate": 0.0
+        },
+        {
+          "category": "human_languages",
+          "subcategory": "arabic",
+          "fertility": 3.973684210526316,
+          "byte_compression": 0.3700980392156863,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 2.8421052631578947,
+          "continued_word_rate": 0.8421052631578947
+        },
+        {
+          "category": "human_languages",
+          "subcategory": "chinese",
+          "fertility": 1.2,
+          "byte_compression": 0.37209302325581395,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 0.0,
+          "continued_word_rate": 0.1125
+        },
+        {
+          "category": "human_languages",
+          "subcategory": "english",
+          "fertility": 1.4210526315789473,
+          "byte_compression": 0.20532319391634982,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 0.2631578947368421,
+          "continued_word_rate": 0.10526315789473684
+        },
+        {
+          "category": "human_languages",
+          "subcategory": "german",
+          "fertility": 2.25,
+          "byte_compression": 0.2977941176470588,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 1.2777777777777777,
+          "continued_word_rate": 0.4166666666666667
+        },
+        {
+          "category": "human_languages",
+          "subcategory": "hindi",
+          "fertility": 5.565217391304348,
+          "byte_compression": 0.3950617283950617,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 4.108695652173913,
+          "continued_word_rate": 0.8695652173913043
+        },
+        {
+          "category": "human_languages",
+          "subcategory": "japanese",
+          "fertility": 1.25,
+          "byte_compression": 0.391156462585034,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 0.0,
+          "continued_word_rate": 0.15217391304347827
+        },
+        {
+          "category": "human_languages",
+          "subcategory": "korean",
+          "fertility": 1.5057471264367817,
+          "byte_compression": 0.4517241379310345,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 0.0,
+          "continued_word_rate": 0.22988505747126436
+        },
+        {
+          "category": "human_languages",
+          "subcategory": "russian",
+          "fertility": 3.3870967741935485,
+          "byte_compression": 0.23755656108597284,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 2.3870967741935485,
+          "continued_word_rate": 0.8709677419354839
+        },
+        {
+          "category": "programming_languages",
+          "subcategory": "javascript",
+          "fertility": 3.0,
+          "byte_compression": 0.27181208053691275,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 1.5555555555555556,
+          "continued_word_rate": 0.2962962962962963
+        },
+        {
+          "category": "programming_languages",
+          "subcategory": "python",
+          "fertility": 2.0285714285714285,
+          "byte_compression": 0.27626459143968873,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 0.8857142857142857,
+          "continued_word_rate": 0.22857142857142856
+        },
+        {
+          "category": "programming_languages",
+          "subcategory": "rust",
+          "fertility": 3.0,
+          "byte_compression": 0.319672131147541,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 1.5769230769230769,
+          "continued_word_rate": 0.5769230769230769
+        },
+        {
+          "category": "programming_languages",
+          "subcategory": "sql",
+          "fertility": 1.65625,
+          "byte_compression": 0.2541966426858513,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 0.4375,
+          "continued_word_rate": 0.234375
+        },
+        {
+          "category": "scientific_formulas",
+          "subcategory": "algebra",
+          "fertility": 2.0,
+          "byte_compression": 0.32967032967032966,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 0.8222222222222222,
+          "continued_word_rate": 0.3333333333333333
+        },
+        {
+          "category": "scientific_formulas",
+          "subcategory": "calculus",
+          "fertility": 6.875,
+          "byte_compression": 0.5288461538461539,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 5.625,
+          "continued_word_rate": 0.875
+        },
+        {
+          "category": "scientific_formulas",
+          "subcategory": "physics",
+          "fertility": 3.090909090909091,
+          "byte_compression": 0.4689655172413793,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 1.9545454545454546,
+          "continued_word_rate": 0.5
+        },
+        {
+          "category": "scientific_formulas",
+          "subcategory": "statistics",
+          "fertility": 6.05,
+          "byte_compression": 0.5654205607476636,
+          "fidelity_pass_rate": 1.0,
+          "subword_fertility": 4.6,
+          "continued_word_rate": 0.8
+        }
+      ],
+      "generated_at": "2026-10-16T21:10:13"
+    }
+  },
+  "updated_at": "2026-10-16T21:10:13"
+}

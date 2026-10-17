@@ -39,6 +39,7 @@ Markdown 汇总。全部指标通过 CLI（tok-cli.exe）真实测量，CLI 非�
 """
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -53,10 +54,20 @@ import unicodedata
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
+# 阈值单点化 / Gini / composite / 失败归因 的共享实现（与 tok_eval 同公式）
+try:
+    import eval_thresholds as ETH
+except ImportError:  # 允许从其它 cwd 以绝对路径运行时仍能找到同目录模块
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import eval_thresholds as ETH
+
 DEFAULT_ROUNDTRIP_LINES = 200
 DEFAULT_STABILITY_LINES = 100
 DEFAULT_OOV_LINES = 500
 DEFAULT_LINE_BUDGET = 1000  # 每语种保留的最大非空行数（用于还原率/稳定性/OOV 抽样）
+DEFAULT_FAITHFUL_LINES = 200  # 每语种用于 fidelity/综合分的随机抽样行数（tok_eval 口径）
+DEFAULT_FIDELITY_SEED = 20261016  # 抽样 RNG 种子（固定 → 跨次运行可复现）
+DEFAULT_FAILED_HEAD = 40  # stdout / Markdown 中展示的失败样本上限（明细全量落盘）
 
 # TokEval 指标（来源: TokEval, arXiv 2608.18062, §3.4 编码保真 / §3.5 数字切分）
 DEFAULT_TOKEVAL_LINES = 300    # UTF-8 三指标抽样行数（每语种，拼单文件整体 encode）
@@ -67,8 +78,13 @@ TOKEVAL_WORKERS = 6            # 数字/操作符抽样的并发 CLI 调用数�
 
 # 协议鲁棒性指标（双口径比值 D / 模型内离散度 dispersion / 评测集质量审计 protocol_audit）
 PROTOCOL_LANGS = ("en", "zh", "code")   # 参与 D 与 dispersion 计算的语种
-PROTOCOL_STABLE_MAX = 0.35              # dispersion ≤ 0.35 → 稳定
-PROTOCOL_SENSITIVE_MAX = 1.0            # 0.35 < dispersion ≤ 1.0 → 敏感；> 1.0 → 口径依赖
+# [阈值单点化] 下面两个判据优先取 thresholds.json::protocol，取不到时回退内置默认值
+try:
+    _PROTO_TH = (ETH.load_thresholds() or {}).get("protocol") or {}
+except Exception:  # 阈值文件缺失/损坏时不阻塞评测
+    _PROTO_TH = {}
+PROTOCOL_STABLE_MAX = float(_PROTO_TH.get("stable_max", 0.35))       # dispersion ≤ 该值 → 稳定
+PROTOCOL_SENSITIVE_MAX = float(_PROTO_TH.get("sensitive_max", 1.0))  # 该值 < dispersion ≤ 上限 → 敏感
 
 
 # ---------------------------------------------------------------------------
@@ -972,6 +988,188 @@ def render_protocol_markdown(payload, title="协议鲁棒性指标报告"):
 
 
 # ---------------------------------------------------------------------------
+# 保真抽样 / 失败样本落盘 / offset 探针（新增；独立段落，不改动既有指标）
+# ---------------------------------------------------------------------------
+
+def _faithful_samples(lines, rng, limit=DEFAULT_FAITHFUL_LINES):
+    """按语种随机抽 limit 行用于 fidelity/综合分。
+
+    使用外部传入的 RNG（同一 RNG 流跨语种推进）→ 固定种子下跨次运行完全可复现。
+    行内容原样返回（不追加尾换行），与 tok_eval 的逐条文本口径一致。
+    """
+    picked = list(lines)
+    if not picked:
+        return []
+    if len(picked) > limit:
+        picked = rng.sample(picked, limit)
+    return picked
+
+
+def _faithful_one(cli, model, payload, idx, tmpdir, tag):
+    """并发辅助：单行 encode->decode 逐字节比对。
+
+    返回 (ok, ids, decoded_bytes, error)。
+    """
+    path = os.path.join(tmpdir, "fa_%s_%d.txt" % (tag, idx))
+    try:
+        with open(path, "wb") as fh:
+            fh.write(payload)
+        ids = encode_file(cli, model, path, tmpdir)
+        decoded = decode_ids(cli, model, ids, tmpdir)
+    except Exception as exc:  # noqa: BLE001
+        return False, [], b"", "cli_error: %s" % exc
+    return (decoded == payload), ids, decoded, None
+
+
+_PROBE_TOK_CACHE = {}
+
+
+def probe_token_offsets(tok_path, text):
+    """用 HF fast tokenizer.json 取 token 序列与 offset（仅当显式提供 --probe-tokenizer）。
+
+    返回 dict 或 None；任何异常都转成 {"error": ...} 而不中断评测。
+    """
+    if not tok_path:
+        return None
+    tk = _PROBE_TOK_CACHE.get(tok_path)
+    if tk is None:
+        try:
+            from tokenizers import Tokenizer
+            tk = Tokenizer.from_file(tok_path)
+        except Exception as exc:  # noqa: BLE001
+            tk = exc
+        _PROBE_TOK_CACHE[tok_path] = tk
+    if isinstance(tk, Exception):
+        return {"tokenizer_json": tok_path, "error": str(tk)}
+    try:
+        enc = tk.encode(text)
+    except Exception as exc:  # noqa: BLE001
+        return {"tokenizer_json": tok_path, "error": str(exc)}
+    return {
+        "tokenizer_json": tok_path,
+        "tokens": list(enc.tokens),
+        "offset_ids": list(enc.ids),
+        "offsets": [list(o) for o in enc.offsets],
+        "note": "offsets 来自 HF fast tokenizer；byte fallback 的多个字节 token 可能共享同一 span",
+    }
+
+
+def _md_cell(text, limit=160):
+    """Markdown 单元格安全化：去换行、转义竖线、超长截断。"""
+    s = (text or "").replace("\r\n", "\n").replace("\n", "\\n").replace("|", "\\|")
+    if limit and len(s) > limit:
+        s = s[:limit] + "…"
+    return s
+
+
+def render_failed_markdown(payload):
+    """失败样本报告 Markdown（归因占比 + 逐条明细）。"""
+    out = ["# 失败样本落盘 — %s" % (payload.get("model") or "-"), ""]
+    out.append("- 生成时间: %s" % payload.get("generated_at"))
+    out.append("- 归一化模式: %s | cli_extra: %s" % (
+        payload.get("norm_mode") or "-",
+        " ".join(payload.get("cli_extra") or []) or "-"))
+    out.append("- 抽样范围: %s" % (payload.get("sample_scope") or "-"))
+    out.append("- 失败样本数: %d" % (payload.get("failed_count") or 0))
+    if payload.get("tokenizer_json"):
+        out.append("- offset 探针 tokenizer.json: `%s`" % payload["tokenizer_json"])
+    out.append("")
+    out.append("## 失败归因占比")
+    out.append("")
+    att = payload.get("attribution") or {}
+    counts = att.get("counts") or {}
+    shares = att.get("shares") or {}
+    descs = att.get("descriptions") or {}
+    out.append("| 归因 | 条数 | 占比 | 说明 |")
+    out.append("|---|---|---|---|")
+    if counts:
+        for lab, cnt in counts.items():
+            sh = shares.get(lab)
+            out.append("| %s | %d | %s | %s |" % (
+                lab, cnt, ("%.1f%%" % (100.0 * sh)) if sh is not None else "-",
+                _md_cell(descs.get(lab) or "", 120)))
+    else:
+        out.append("| - | 0 | - | 无失败样本 |")
+    out.append("")
+    out.append("## 失败明细")
+    out.append("")
+    for rec in payload.get("failed_samples") or []:
+        out.append("### #%03d · language=%s · attribution=%s" % (
+            rec.get("ordinal", 0), rec.get("language") or "-", rec.get("attribution") or "-"))
+        out.append("")
+        out.append("- 输入文件: `%s`" % (rec.get("input_file") or "-"))
+        if rec.get("input_sha256_16"):
+            out.append("- sha256[:16]: `%s` | bytes: %s" % (
+                rec["input_sha256_16"], rec.get("input_bytes")))
+        out.append("- 原文: `%s`" % _md_cell(rec.get("raw")))
+        out.append("- 解码: `%s`" % _md_cell(rec.get("decoded")))
+        out.append("- token ids: `%s`" % _md_cell(",".join(str(x) for x in (rec.get("ids") or [])), 300))
+        if rec.get("offsets") and not rec["offsets"].get("error"):
+            out.append("- tokens: `%s`" % _md_cell(" ".join(rec["offsets"].get("tokens") or []), 300))
+            out.append("- offsets: `%s`" % _md_cell(
+                " ".join(str(tuple(o)) for o in (rec["offsets"].get("offsets") or [])), 300))
+        elif rec.get("offsets"):
+            out.append("- offset 探针失败: %s" % _md_cell(rec["offsets"].get("error"), 200))
+        if rec.get("error"):
+            out.append("- 错误: %s" % _md_cell(rec["error"], 200))
+        if rec.get("reproduce"):
+            out.append("- 复现: `%s`" % rec["reproduce"])
+        out.append("")
+    return "\n".join(out)
+
+
+def write_failed_samples(out_dir, records, meta, attribution):
+    """把失败样本（原文/解码/token 序列/offset）落盘为 JSON + Markdown + 逐条输入文件。
+
+    直接以 out_dir 作为 --corpus-dir 重跑 eval_metrics.py 即可复现同一批失败样本。
+    """
+    os.makedirs(out_dir, exist_ok=True)
+    kept = []
+    for i, rec in enumerate(records, 1):
+        raw = rec.pop("_raw_bytes", None)
+        rec["ordinal"] = i
+        if raw is not None:
+            p = os.path.join(out_dir, "failed_sample_%03d.txt" % i)
+            with open(p, "wb") as fh:
+                fh.write(raw)
+            rec["input_file"] = p
+            rec["input_sha256_16"] = hashlib.sha256(raw).hexdigest()[:16]
+            rec["input_bytes"] = len(raw)
+        ids_text = ",".join(str(x) for x in (rec.get("ids") or []))
+        rec["reproduce"] = ("%s decode --model %s --ids \"%s\"" % (
+            meta.get("cli") or "tok-cli", meta.get("model") or "model.tkm", ids_text)) \
+            if ids_text else None
+        kept.append(rec)
+    payload = {
+        "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "model": meta.get("model"),
+        "cli": meta.get("cli"),
+        "cli_extra": meta.get("cli_extra"),
+        "norm_mode": meta.get("norm_mode"),
+        "tokenizer_json": meta.get("probe_tokenizer"),
+        "sample_scope": meta.get("sample_scope"),
+        "attribution_source": "eval_thresholds.classify_roundtrip_failure / summarize_attribution（与 tok_eval 同归类）",
+        "failed_count": len(kept),
+        "attribution": attribution,
+        "failed_samples": kept,
+    }
+    js = os.path.join(out_dir, "failed_samples.json")
+    with open(js, "w", encoding="utf-8") as fh:
+        json.dump(payload, fh, ensure_ascii=False, indent=2)
+    md = os.path.join(out_dir, "failed_samples.md")
+    with open(md, "w", encoding="utf-8") as fh:
+        fh.write(render_failed_markdown(payload))
+    return {
+        "dir": out_dir,
+        "json": js,
+        "markdown": md,
+        "failed_count": len(kept),
+        "sample_files": [r["input_file"] for r in kept if r.get("input_file")],
+        "attribution": attribution,
+    }
+
+
+# ---------------------------------------------------------------------------
 # 主流程
 # ---------------------------------------------------------------------------
 
@@ -1005,6 +1203,20 @@ def main():
                         help="[协议鲁棒性] 协议鲁棒性 JSON 输出路径（可选）")
     parser.add_argument("--protocol-md", default="",
                         help="[协议鲁棒性] 协议鲁棒性 Markdown 输出路径（可选）")
+    # 评测侧改造（新增，全部可选；不传时行为与既有版本完全一致）
+    parser.add_argument("--thresholds", default="",
+                        help="[阈值单点化] thresholds.json 路径（默认取脚本同目录的 "
+                             "thresholds.json；未找到时使用内置兜底值并告警）")
+    parser.add_argument("--probe-tokenizer", default="",
+                        help="[失败样本落盘] HF fast tokenizer.json 路径，用于为失败样本补 "
+                             "token 序列与 offset（可选，不传则仅落原文/解码/token ids）")
+    parser.add_argument("--failed-samples-dir", default="",
+                        help="[失败样本落盘] 失败样本输出目录（默认 "
+                             "eval_failed_samples_<date>/，与脚本同目录）")
+    parser.add_argument("--no-gates", action="store_true",
+                        help="[门禁] 跳过门禁判定（只出指标，不影响退出码）")
+    parser.add_argument("--gates-strict", action="store_true",
+                        help="[门禁] 门禁未通过时以退出码 1 结束（默认只打印 FAIL 不改退出码）")
     args = parser.parse_args()
 
     global CLI_EXTRA
@@ -1050,6 +1262,16 @@ def main():
     totals_bytes = 0
     totals_tokens = 0
 
+    # 保真抽样 / 失败样本聚合（新增；种子固定 → 可复现）
+    faithful_rng = random.Random(DEFAULT_FIDELITY_SEED)
+    faithful_fail_all = []
+    faithful_pass_all = 0
+    faithful_tested_all = 0
+    faithful_tokens_all = 0
+    faithful_bytes_all = 0
+    faithful_words_all = 0
+    faithful_ids_used = set()
+
     with tempfile.TemporaryDirectory(prefix="tok_eval_") as tmpdir:
         for lang in langs:
             files = read_lang_files(os.path.join(corpus_dir, lang))
@@ -1070,6 +1292,57 @@ def main():
             # 字符数基于全部文件文本
             all_text = b"".join(open(f, "rb").read() for f in files)
             char_count = len(all_text.decode("utf-8", "replace"))
+
+            # ---- 保真抽样（tok_eval fidelity 口径；失败样本落盘）----
+            faithful_samples = _faithful_samples(lang_lines, faithful_rng)
+            faithful_pass = 0
+            faithful_fail = []
+            lang_faithful_tokens = 0
+            lang_faithful_bytes = 0
+            lang_faithful_words = 0
+            if faithful_samples:
+                with ThreadPoolExecutor(max_workers=TOKEVAL_WORKERS) as ex:
+                    futs = [ex.submit(_faithful_one, cli, model, buf, i, tmpdir, lang)
+                            for i, buf in enumerate(faithful_samples)]
+                    for i, fut in enumerate(futs):
+                        try:
+                            ok, ids, dec, err = fut.result()
+                        except Exception as exc:  # noqa: BLE001
+                            ok, ids, dec, err = False, [], b"", "worker_error: %s" % exc
+                        buf = faithful_samples[i]
+                        lang_faithful_bytes += len(buf)
+                        lang_faithful_tokens += len(ids)
+                        faithful_ids_used.update(ids)
+                        raw_text = buf.decode("utf-8", "replace")
+                        lang_faithful_words += ETH.count_words(raw_text)
+                        if ok:
+                            faithful_pass += 1
+                        else:
+                            label, desc = ETH.classify_roundtrip_failure(
+                                raw_text, dec.decode("utf-8", "replace"), err)
+                            rec = {
+                                "language": lang,
+                                "sample_index": i,
+                                "input_bytes": len(buf),
+                                "raw": raw_text,
+                                "decoded": dec.decode("utf-8", "replace"),
+                                "token_count": len(ids),
+                                "ids": ids,
+                                "attribution": label,
+                                "attribution_desc": desc,
+                                "error": err,
+                                "offsets": probe_token_offsets(args.probe_tokenizer, raw_text),
+                                "_raw_bytes": buf,
+                            }
+                            faithful_fail.append(rec)
+            faithful_rate = (faithful_pass / float(len(faithful_samples))) \
+                if faithful_samples else None
+            faithful_fail_all.extend(faithful_fail)
+            faithful_pass_all += faithful_pass
+            faithful_tested_all += len(faithful_samples)
+            faithful_tokens_all += lang_faithful_tokens
+            faithful_bytes_all += lang_faithful_bytes
+            faithful_words_all += lang_faithful_words
 
             rt_ok, rt_mism, rt_tested = roundtrip_check(cli, model, lang_lines, tmpdir)
             stab = stability_check(cli, model, lang_lines, tmpdir)
@@ -1095,6 +1368,10 @@ def main():
                 "stability": round(stab, 6) if stab is not None else None,
                 "oov_rate": round(oov, 6) if oov is not None else None,
                 "byte_fallback_rate": round(fb, 6) if fb is not None else None,
+                "faithful_sample_lines": len(faithful_samples),
+                "faithful_pass_rate": round(faithful_rate, 6) if faithful_rate is not None else None,
+                "faithful_failures": len(faithful_fail),
+                "faithful_sample_bytes": lang_faithful_bytes,
                 "tokeval": {
                     "utf8": tk_utf8,
                     "digit": tk_digit,
@@ -1116,6 +1393,120 @@ def main():
         enc_tps = dec_tps = load_ms = None
         if max_file is not None:
             enc_tps, dec_tps, load_ms = throughput(cli, model, max_file, tmpdir)
+
+    # ---- 公平性 / 综合分 / 失败样本落盘 / 门禁（新增；独立段落，不改动上述既有指标）----
+    thresholds = ETH.load_thresholds(args.thresholds or None)
+    provenance = ETH.thresholds_provenance(thresholds)
+
+    stability_overall = round(
+        sum(v["stability"] for v in lang_results.values() if v["stability"] is not None)
+        / max(1, sum(1 for v in lang_results.values() if v["stability"] is not None)), 6)
+    utf8_overall = _avg_opt([v["tokeval"]["utf8"]["utf8_completeness"]
+                             for v in lang_results.values() if v["tokeval"]["utf8"]])
+
+    # 跨语种成本（tokens / 原始 UTF-8 字节），语种等权 → Gini（口径同 tok_eval）
+    per_lang_cost = {}
+    for lang, v in lang_results.items():
+        b = v.get("bytes") or 0
+        t = v.get("tokens") or 0
+        if b > 0 and t > 0:
+            per_lang_cost[lang] = t / float(b)
+    gini = round(ETH.fairness_gini(per_lang_cost), 6) if per_lang_cost else None
+    fairness = {
+        "gini": gini,
+        "per_lang_cost": {k: round(v, 8) for k, v in sorted(per_lang_cost.items())},
+        "scope": "跨语种 tokens/原始 UTF-8 字节，语种等权；"
+                 "公式同 tok_eval app/metrics.py::fairness_gini",
+    }
+
+    totals_bpt = round(totals_bytes / totals_tokens, 6) if totals_tokens > 0 else None
+    pooled_pass = round(faithful_pass_all / float(faithful_tested_all), 6) \
+        if faithful_tested_all else None
+    micro_fertility_sample = round(faithful_tokens_all / float(faithful_words_all), 6) \
+        if faithful_words_all else None
+    sampled_byte_compression = round(faithful_tokens_all / float(faithful_bytes_all), 6) \
+        if faithful_bytes_all else None
+    corpus_byte_compression = round(1.0 / totals_bpt, 6) if totals_bpt else None
+    vocab_util = round(len(faithful_ids_used) / float(vocab_size), 8) \
+        if (vocab_size and faithful_ids_used) else None
+
+    composite_inputs = {
+        "fertility": micro_fertility_sample,
+        "byte_compression": corpus_byte_compression,
+        "fidelity_pass_rate": pooled_pass,
+        "vocabulary_utilization": vocab_util,
+        "fairness_gini": gini,
+    }
+    composite = None
+    if all(composite_inputs.get(k) is not None for k in
+           ("fertility", "byte_compression", "fidelity_pass_rate", "fairness_gini")):
+        composite = ETH.composite_score(composite_inputs, thresholds.get("composite"))
+    composite_block = {
+        "score": (composite or {}).get("score"),
+        "parts": (composite or {}).get("parts"),
+        "weights": (composite or {}).get("weights")
+                   or (thresholds.get("composite") or {}).get("weights"),
+        "norm": (composite or {}).get("norm"),
+        "inputs": dict(composite_inputs),
+        "inputs_source": {
+            "fertility": "保真抽样（每语种 %d 行）tokens/words，CJK 按字计词"
+                         % DEFAULT_FAITHFUL_LINES,
+            "byte_compression": "全语料 tokens/bytes 的倒数（1 / bpt_total）",
+            "fidelity_pass_rate": "保真抽样逐行 encode->decode 精确匹配通过率",
+            "vocabulary_utilization": "保真抽样 unique token 数 / vocab_size（小样本，低可信）",
+            "fairness_gini": "全语料跨语种 tokens/byte 语种等权 Gini",
+        },
+        "scope": "0-100；权重与归一化映射见 thresholds.json#composite，"
+                 "公式同 tok_eval app/metrics.py::composite_score",
+    }
+    fidelity_block = {
+        "lines_per_lang": DEFAULT_FAITHFUL_LINES,
+        "seed": DEFAULT_FIDELITY_SEED,
+        "tested": faithful_tested_all,
+        "failed": len(faithful_fail_all),
+        "pooled_pass_rate": pooled_pass,
+        "sampled_byte_compression": sampled_byte_compression,
+        "micro_fertility_sampled": micro_fertility_sample,
+        "scope": "每语种随机抽样（固定种子，可复现），逐行 encode->decode 精确匹配；"
+                 "口径同 tok_eval fidelity_pass_rate",
+    }
+
+    # 失败样本落盘（原文 / 解码 / token 序列 / offset）+ 归因占比
+    fs_dir = os.path.abspath(args.failed_samples_dir) if args.failed_samples_dir else \
+        os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                     "eval_failed_samples_%s" % date_str)
+    attribution = ETH.summarize_attribution(faithful_fail_all)
+    failed = write_failed_samples(fs_dir, faithful_fail_all, {
+        "model": model,
+        "cli": cli,
+        "cli_extra": list(CLI_EXTRA),
+        "norm_mode": ETH.norm_mode_from_cli_extra(CLI_EXTRA),
+        "probe_tokenizer": os.path.abspath(args.probe_tokenizer) if args.probe_tokenizer else None,
+        "sample_scope": "每语种随机抽样 %d 行（seed=%d）；语种=%s" % (
+            DEFAULT_FAITHFUL_LINES, DEFAULT_FIDELITY_SEED, ",".join(langs)),
+    }, attribution)
+    failed_compact = [{
+        "ordinal": r.get("ordinal"),
+        "language": r.get("language"),
+        "attribution": r.get("attribution"),
+        "attribution_desc": r.get("attribution_desc"),
+        "input_file": r.get("input_file"),
+        "input_sha256_16": r.get("input_sha256_16"),
+        "raw": (r.get("raw") or "")[:2000],
+        "decoded": (r.get("decoded") or "")[:2000],
+        "token_count": r.get("token_count"),
+        "ids": (r.get("ids") or [])[:512],
+        "error": r.get("error"),
+    } for r in faithful_fail_all]
+
+    # 门禁（阈值全部取自 thresholds.json，不在代码内硬编码）
+    gate_ctx = {"norm_mode": ETH.norm_mode_from_cli_extra(CLI_EXTRA),
+                "cli_extra": list(CLI_EXTRA)}
+    gate_metrics = ETH.build_gate_metrics(
+        fairness, composite, stability_overall, pooled_pass, totals_bpt,
+        utf8_overall, lang_results)
+    gates = ETH.evaluate_gates(gate_metrics, (thresholds.get("eval") or {}).get("gates") or [],
+                               gate_ctx)
 
     # ---- 协议鲁棒性（可选；独立计算、独立输出段落，不改动上述任何既有指标）----
     protocol_sec = None
@@ -1185,6 +1576,20 @@ def main():
             "decode_tps": round(dec_tps, 3) if dec_tps is not None else None,
             "load_ms": round(load_ms, 3) if load_ms is not None else None,
         },
+        # 新增区块：公平性 / 综合分 / 保真抽样 / 失败样本 / 门禁（阈值单点化）
+        "thresholds": provenance,
+        "fairness": fairness,
+        "composite": composite_block,
+        "fidelity_sample": fidelity_block,
+        "failed_samples": {
+            "count": failed["failed_count"],
+            "json": failed["json"],
+            "markdown": failed["markdown"],
+            "dir": failed["dir"],
+            "sample_files": failed["sample_files"],
+            "attribution": attribution,
+        },
+        "gates": gates,
     }
 
     if protocol_sec is not None:
@@ -1246,6 +1651,53 @@ def main():
         ("%.4f" % tk["digit_split_variability"]) if tk["digit_split_variability"] is not None else "-",
         ("%.4f" % tk["operator_isolation"]) if tk["operator_isolation"] is not None else "-",
     ))
+    fa = report["fairness"]
+    cbk = report["composite"]
+    fbk = report["fidelity_sample"]
+    att_counts = attribution.get("counts") or {}
+    att_shares = attribution.get("shares") or {}
+    print("")
+    print("## 跨语种公平性 / 综合分（tok_eval 口径移植）")
+    print("| 指标 | 值 | 口径 |")
+    print("|---|---|---|")
+    print("| fairness_gini | %s | 跨语种 tokens/byte，语种等权 |" % _pfmt(fa["gini"]))
+    print("| composite_score | %s | 0-100 加权（weights=%s） |" % (
+        _pfmt(cbk["score"]), json.dumps(cbk["weights"], ensure_ascii=False)))
+    print("| fidelity_pass_rate（每语种抽样 %d 行） | %s | 逐行 encode->decode 精确匹配 |" % (
+        fbk["lines_per_lang"], _pfmt(fbk["pooled_pass_rate"])))
+    print("| micro fertility（抽样） | %s | tokens/words（CJK 按字计词） |" % _pfmt(
+        fbk["micro_fertility_sampled"]))
+    print("| byte_compression（全语料） | %s | tokens/原始 UTF-8 字节 |" % _pfmt(
+        cbk["inputs"].get("byte_compression")))
+    print("")
+    print("| 语种 | tokens/byte |")
+    print("|---|---|")
+    for k, v in fa["per_lang_cost"].items():
+        print("| %s | %.6f |" % (k, v))
+    print("- composite inputs: %s" % json.dumps(cbk["inputs"], ensure_ascii=False))
+    print(ETH.render_gates_markdown(gates, title="门禁判定（阈值单点 thresholds.json）"))
+    print("")
+    print("## 失败样本落盘与归因")
+    print("- failed: %d / %d 条（pass_rate=%s），seed=%d" % (
+        fbk["failed"], fbk["tested"], _pfmt(fbk["pooled_pass_rate"]), fbk["seed"]))
+    print("| 归因 | 条数 | 占比 |")
+    print("|---|---|---|")
+    if att_counts:
+        for lab, cnt in att_counts.items():
+            print("| %s | %d | %.1f%% |" % (lab, cnt, 100.0 * att_shares.get(lab, 0.0)))
+    else:
+        print("| - | 0 | - |")
+    for r in failed_compact[:DEFAULT_FAILED_HEAD]:
+        print("- #%03d [%s] %s: `%s` -> `%s`" % (
+            r["ordinal"], r["language"], r["attribution"],
+            _md_cell(r["raw"], 60), _md_cell(r["decoded"], 60)))
+    if len(failed_compact) > DEFAULT_FAILED_HEAD:
+        print("- ... 其余 %d 条见 failed_samples.json" % (len(failed_compact) - DEFAULT_FAILED_HEAD))
+    print("- failed_samples: %s" % failed["json"])
+    print("- failed_samples (Markdown): %s" % failed["markdown"])
+    print("- thresholds: %s (modified=%s)" % (
+        provenance.get("path"), provenance.get("file_modified")))
+    gate_failed = (not args.no_gates) and (not gates["passed"])
     if protocol_sec is not None:
         pf = protocol_sec
         pd = pf["D"]
@@ -1307,6 +1759,9 @@ def main():
             print("Protocol Markdown: %s" % pm)
     print("")
     print("Report JSON: %s" % out_path)
+    if gate_failed:
+        print("[GATES] 未通过（--gates-strict 生效）→ 退出码 1")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

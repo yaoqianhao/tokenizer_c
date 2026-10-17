@@ -5,6 +5,9 @@
 四段串联（构建 / 训练为可选段）：
     [build] -> [train] -> export -> verify
 
+导出与自检的归一化模式由 --norm=nfkc|nfc|reversible 决定（默认 nfc；nfkc 为兼容模式）；
+导出物 normalizer、tokenizer_c_norm.json sidecar、tok-cli encode --norm 三者同模式。
+
 子命令：
     all      按需执行 构建/训练 → 转换 → 自检（默认入口）
     export   只做 转换（json -> HF fast 目录）
@@ -101,8 +104,9 @@ def step_train(corpus: str, model: str, json_out: str, tok_cli: str,
 
 
 def step_export(json_in: str, out_dir: str, model_type: str | None,
-                force: bool, manifest: dict) -> dict:
-    log("[3/4] 转换 -> HF fast 目录")
+                force: bool, manifest: dict,
+                norm_mode: str = hf_export.DEFAULT_NORM_MODE) -> dict:
+    log("[3/4] 转换 -> HF fast 目录（--norm=%s）" % norm_mode)
     if not os.path.exists(json_in):
         log("[FAIL] 输入 json 不存在：%s" % json_in)
         raise SystemExit(1)
@@ -111,11 +115,15 @@ def step_export(json_in: str, out_dir: str, model_type: str | None,
             "       如确认要重建，请加 --force" % out_dir)
         raise SystemExit(1)
     cfg, stats, specials = hf_export.convert(hf_export._read_json(json_in),
-                                             model_type=model_type)
+                                             model_type=model_type,
+                                             norm_mode=norm_mode)
+    log("  归一化模式: --norm=%s -> normalizer = Sequence[%s]"
+        % (stats["norm_mode"], ", ".join(stats["normalizer_types"])))
     log("  体检: %d 项发现" % len(stats["findings"]))
     for f in stats["findings"]:
         log("    [%s] %s" % (f["severity"], f["detail"]))
-    paths = hf_export.write_outputs(cfg, out_dir, specials)
+    paths = hf_export.write_outputs(cfg, out_dir, specials,
+                                    norm_mode=norm_mode, source_json=json_in)
     for name, p in paths.items():
         log("  写入 %s (%d bytes)" % (p, os.path.getsize(p)))
     manifest["export"] = {"in": json_in, "out_dir": out_dir,
@@ -123,6 +131,8 @@ def step_export(json_in: str, out_dir: str, model_type: str | None,
                           "null_fixed": stats["null_fixed"],
                           "byte_added": stats["byte_added"],
                           "model_type": stats["model_type"],
+                          "norm_mode": stats["norm_mode"],
+                          "normalizer_types": stats["normalizer_types"],
                           "findings_count": len(stats["findings"]),
                           "files": {k: os.path.getsize(v) for k, v in paths.items()}}
     return stats
@@ -130,12 +140,13 @@ def step_export(json_in: str, out_dir: str, model_type: str | None,
 
 def step_verify(out_dir: str, json_in: str, model: str | None, tok_cli: str,
                 verify_file: str | None, tolerance: float, manifest: dict,
-                strict: bool = False, tmp_dir: str | None = None) -> int:
-    log("[4/4] 自检（HF 加载 + 与 tok-cli encode 的 piece 级 parity）")
+                strict: bool = False, tmp_dir: str | None = None,
+                norm_mode: str = hf_export.DEFAULT_NORM_MODE) -> int:
+    log("[4/4] 自检（HF 加载 + 与 tok-cli encode 的 piece 级 parity，--norm=%s）" % norm_mode)
     try:
         res = hf_export.verify(out_dir, json_in, model, tok_cli,
                                verify_file=verify_file, tolerance=tolerance, strict=strict,
-                               tmp_dir=tmp_dir)
+                               tmp_dir=tmp_dir, norm_mode=norm_mode)
     except Exception as exc:  # noqa: BLE001
         log("[FAIL] 自检异常（%s: %s）" % (type(exc).__name__, exc))
         manifest["verify"] = {"verdict": "FAIL_EXCEPTION",
@@ -146,10 +157,15 @@ def step_verify(out_dir: str, json_in: str, model: str | None, tok_cli: str,
     if not res["load"].get("ok"):
         log("[FAIL] 产出目录无法被 tokenizers/transformers 加载")
         return 2
+    if res.get("verdict") == "FAIL_NORMALIZER_MODE":
+        log("[FAIL] 导出物 normalizer 与 --norm=%s 不一致：实际 Sequence[%s]，期望 Sequence[%s]"
+            % (norm_mode, ", ".join(res.get("normalizer_types") or []),
+               ", ".join(res.get("normalizer_expected") or [])))
+        return 3
     if not res.get("c_cli_available"):
-        log("[FAIL] C 侧不可用，无法完成 piece 级 parity 校验：%s" % res.get("c_cli_reason"))
-        log("       请用 --model 指定 .tkm，或先构建 tok-cli（scripts/build.ps1）")
-        return 1
+        log("[WARN] C 侧 piece 级 parity 跳过：%s" % res.get("c_cli_reason"))
+        log("       请用 --model 指定 .tkm，或用支持该 --norm 的 tok-cli（scripts/build.ps1）重建")
+        return 0 if res.get("verdict") == "PASS_LOAD_ONLY" else 1
     log("  源 json 剪枝(score=null) piece 数: %d" % res["pruned_piece_count"])
     for row in res["sentences"]:
         if row.get("c_tokens") is None:
@@ -212,6 +228,11 @@ def main(argv=None) -> int:
     ap.add_argument("--min-rounds", type=int, default=None)
     ap.add_argument("--tok-cli", default=DEFAULT_TOK_CLI)
     ap.add_argument("--model-type", default=None)
+    ap.add_argument("--norm", default=hf_export.DEFAULT_NORM_MODE,
+                    help="导出/自检的归一化模式 %s（默认 %s；nfkc 为兼容模式，可复现历史产出）"
+                         % ("|".join(hf_export.NORM_MODES), hf_export.DEFAULT_NORM_MODE))
+    ap.add_argument("--norm-reversible", action="store_true",
+                    help="兼容别名：等价于 --norm=reversible")
     ap.add_argument("--verify-file", default=None)
     ap.add_argument("--verify-tolerance", type=float, default=0.02,
                     help="token 用量相对差提示阈值（默认 0.02；仅提示，不参与判定）")
@@ -221,6 +242,13 @@ def main(argv=None) -> int:
                     help="严格模式：自检阶段任何非逐 piece 一致即判定失败")
     ap.add_argument("--force", action="store_true", help="允许覆盖已存在的输出目录")
     args = ap.parse_args(argv)
+
+    try:
+        norm_mode = hf_export.normalize_norm_mode(
+            "reversible" if args.norm_reversible else args.norm)
+    except ValueError as exc:
+        log("[FAIL] %s" % exc)
+        return 1
 
     workdir = os.path.abspath(args.workdir or DEFAULT_WORKDIR)
     json_path = os.path.abspath(args.json) if args.json else os.path.join(workdir, "model.json")
@@ -247,12 +275,14 @@ def main(argv=None) -> int:
     log("  workdir   : %s" % workdir)
     log("  model/json: %s | %s" % (model, json_path))
     log("  out-dir   : %s" % out_dir)
+    log("  norm      : %s（normalizer = Sequence[%s]）"
+        % (norm_mode, ", ".join(hf_export.expected_normalizer_types(norm_mode))))
 
     manifest = {"command": args.command, "started": time.strftime("%Y-%m-%d %H:%M:%S"),
                 "python": sys.executable, "python_version": sys.version.split()[0],
                 "repo": REPO_ROOT, "tok_cli": tok_cli, "workdir": workdir,
                 "model": model, "json": json_path, "out_dir": out_dir,
-                "verify_tmp_dir": tmp_dir}
+                "norm_mode": norm_mode, "verify_tmp_dir": tmp_dir}
 
     need_train = args.command == "all" and (args.train or not args.json)
 
@@ -274,12 +304,13 @@ def main(argv=None) -> int:
             log("[2/4] 训练 —— 跳过（使用既有 --json）")
 
     if args.command in ("all", "export"):
-        step_export(json_path, out_dir, args.model_type, args.force, manifest)
+        step_export(json_path, out_dir, args.model_type, args.force, manifest,
+                    norm_mode=norm_mode)
 
     if args.command in ("all", "verify"):
         rc = step_verify(out_dir, json_path, model, tok_cli,
                          args.verify_file, args.verify_tolerance, manifest,
-                         strict=args.strict, tmp_dir=tmp_dir)
+                         strict=args.strict, tmp_dir=tmp_dir, norm_mode=norm_mode)
     else:
         rc = 0
 

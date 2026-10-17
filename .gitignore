@@ -63,3 +63,11 @@ backup_round8/
 
 # ===== Python venv (never commit) =====
 .venv/
+
+
+# ===== HF 导出产物目录 / 探针运行痕迹（体积大，不入库）=====
+hf_export_big3/
+hf_export_big3_nfc/
+hf_export_big3_rev/
+benchmark/probe_runs/
+benchmark/corpus_probe_clean/

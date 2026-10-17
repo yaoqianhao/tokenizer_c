@@ -1,0 +1,153 @@
+{
+  "version": 1,
+  "updated_at": "2026-10-16",
+  "owner": "benchmark/",
+  "notes": [
+    "本文件是 tokenizer_c 评测侧唯一阈值来源：eval_metrics.py（语料级主评测）与 probe_regression.py（19 子类探针回归）都从这里读门禁，不再各自硬编码。",
+    "文档 docs/eval_thresholds.md 由 benchmark/gen_thresholds_doc.py 从本文件生成，禁止手改该文档。",
+    "门禁初值来源：output/tokenizer_c-优化可能性分析报告.md §7.2 建议门禁表；composite_score 阈值由本机基线实跑校准（见 calibrated_by）。",
+    "改阈值只允许改本文件：改完请重跑 gen_thresholds_doc.py 让文档同步。"
+  ],
+  "calibrated_by": {
+    "date": "2026-10-16",
+    "model": "E:\\tokenizer_c\\model_big3.tkm",
+    "cli": "E:\\tokenizer_c\\build_big3\\tok-cli.exe",
+    "probe_tokenizers": [
+      "E:\\tokenizer_c\\hf_export_big3_nfc（nfc，2026-10-16 起为导出默认）",
+      "E:\\tokenizer_c\\hf_export_big3（nfkc 兼容模式）",
+      "E:\\tokenizer_c\\hf_export_big3_rev（reversible 模式）"
+    ],
+    "method": "先跑基线得到实测值，再把 composite_score 阈值取实测值向下取整留出余量；其余阈值沿用报告 §7.2。"
+  },
+  "composite": {
+    "weights": {
+      "fertility": 0.35,
+      "byte_compression": 0.2,
+      "fidelity_pass_rate": 0.25,
+      "vocabulary_utilization": 0.1,
+      "fairness": 0.1
+    },
+    "norm": {
+      "fertility_good": 1.0,
+      "fertility_bad": 4.0,
+      "byte_good": 0.1,
+      "byte_bad": 0.4
+    },
+    "source": "E:\\tok_eval\\app\\metrics.py::DEFAULT_WEIGHTS / composite_score（同公式移植到 benchmark/eval_thresholds.py）"
+  },
+  "grades": {
+    "note": "fertilty 分级口径与 tok_eval grade_fertility 一致",
+    "excellent": 1.5,
+    "good": 2.0,
+    "fair": 3.0,
+    "poor": 4.0
+  },
+  "eval": {
+    "scope": "语料级主评测 benchmark/eval_metrics.py（corpus: en/zh/code）",
+    "gates": [
+      {
+        "key": "fairness_gini",
+        "op": "<=",
+        "value": 0.11,
+        "note": "跨语种 tokens/byte 基尼（语种等权），报告 §7.2"
+      },
+      {
+        "key": "composite_score",
+        "op": ">=",
+        "value": 60.0,
+        "note": "综合分（tok_eval 同公式，输入为语料级微平均 + 采样保真率）；基线校准值"
+      },
+      {
+        "key": "stability",
+        "op": ">=",
+        "value": 0.85,
+        "note": "扰动稳定性，报告 §7.2（README 记载 0.709 未达标）"
+      },
+      {
+        "key": "roundtrip_pass_rate",
+        "op": ">=",
+        "value": 0.95,
+        "applies_when": {
+          "norm_mode": "reversible"
+        },
+        "note": "reversible 模式下每行 encode→decode 逐字节还原率"
+      },
+      {
+        "key": "roundtrip_pass_rate",
+        "op": ">=",
+        "value": 0.7,
+        "applies_when": {
+          "norm_mode_in": [
+            "nfkc",
+            "nfc"
+          ]
+        },
+        "note": "nfkc/nfc 兼容模式仅作不回归下限（有损归一化天然无法 100% 还原）"
+      },
+      {
+        "key": "utf8_completeness",
+        "op": ">=",
+        "value": 0.85,
+        "note": "TokEval UTF-8 完整性（不回归下限）。口径说明：该指标按『非特殊 token 字节能否严格解码』统计，单字节 byte fallback piece 天然判为不完整，因此只要模型存在 byte fallback，理论上限就 <1.0；报告 §7.2 的『100%』是理想目标值，实际门禁按 2026-10-16 基线实测值向下取整标定。"
+      },
+      {
+        "key": "micro_byte_compression",
+        "op": "<=",
+        "value": 0.34,
+        "note": "微平均 tokens/byte（= 1/bpt_total），报告 §7.2『不劣化』"
+      }
+    ]
+  },
+  "probe": {
+    "scope": "19 子类探针回归 benchmark/probe_regression.py（tok_eval 内置语料 95 样本）",
+    "tok_eval_root": "E:\\tok_eval",
+    "corpus_dir": "E:\\tokenizer_c\\benchmark\\corpus_probe_clean\\builtin",
+    "corpus_note": "阶段0 去污染后的探针语料（剔除 19 个文件中的『内容由AI生成』声明行），仓内自带、便于 CI 独立运行；如需对比原始 tok_eval 语料，用 --corpus-dir 覆盖。",
+    "baseline": "E:\\tokenizer_c\\benchmark\\probe_baseline.json",
+    "gates": [
+      {
+        "key": "fairness_gini",
+        "op": "<=",
+        "value": 0.11,
+        "note": "8 种人类语言 tokens/byte 基尼，报告 §7.2"
+      },
+      {
+        "key": "composite_score",
+        "op": ">=",
+        "value": 60.0,
+        "note": "探针综合分；基线校准值"
+      },
+      {
+        "key": "micro_byte_compression",
+        "op": "<=",
+        "value": 0.35,
+        "note": "探针微平均 tokens/byte，报告 §7.2『≤0.34 不劣化』留 0.01 采样余量"
+      },
+      {
+        "key": "micro_fidelity_pass_rate",
+        "op": ">=",
+        "value": 0.95,
+        "applies_when": {
+          "norm_mode": "reversible"
+        },
+        "note": "reversible 导出物在探针语料上的保真率下限"
+      }
+    ],
+    "diff_tolerance": {
+      "note": "探针回归 diff 容差：任一子类指标劣化超容差即标 REGRESSION（--strict 时退出码 1）",
+      "fertility": 0.05,
+      "byte_compression": 0.005,
+      "fidelity_pass_rate": 0.0,
+      "subword_fertility": 0.05,
+      "continued_word_rate": 0.02,
+      "fairness_gini": 0.002,
+      "composite_score": 0.5
+    }
+  },
+  "protocol": {
+    "scope": "协议鲁棒性判定 benchmark/eval_metrics.py（双口径比值 D / 模型内离散度 dispersion）",
+    "stable_max": 0.35,
+    "sensitive_max": 1.0,
+    "note": "dispersion ≤ stable_max → 稳定；stable_max < dispersion ≤ sensitive_max → 敏感；> sensitive_max → 口径依赖。该判据不再硬编码在脚本里，改阈值只改本文件。"
+  }
+}

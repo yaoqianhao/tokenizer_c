@@ -10,7 +10,10 @@
 转换行为（与附件脚本逐条对齐，不可随意更改）：
   1. decoder：改成 Sequence[ByteFallback, Metaspace]（去掉已废弃的 add_prefix_space）
   2. 补 pre_tokenizer：Metaspace(replacement="▁", prepend_scheme="never", split=false)
-  3. 补 normalizer：Sequence[NFKC, Replace(\\s -> " "), Replace(零宽族 -> "")]
+  3. 补 normalizer（随 --norm 模式变化；nfc 自 2026-10-16 起为默认，nfkc 保留为兼容模式）：
+       nfkc        Sequence[NFKC, Replace(\\s -> " "), Replace(零宽族 -> "")]
+       nfc         Sequence[NFC,  Replace(\\s -> " "), Replace(零宽族 -> "")]
+       reversible  Sequence[NFC,  Replace([\\t\\n\\r] -> " ")]（不折叠全角/非 ASCII 空白、不剔零宽）
   4. null(NaN) 分数 -> 极小值 -1e9（这些 piece 在 C 端从未被命中，改分不影响 C 行为）
   5. 补 256 个 <0xXX> 字节 piece，分数取 C 端常量 kByteFallbackScore = -10.0
      （src/tokenizer.c:348），使 C/HF 两侧字节回退对称
@@ -19,12 +22,21 @@
   7. 无参数调用时等价于原脚本的 `patch(src, out_dir)`
 
 输出目录内容：tokenizer.json / tokenizer_config.json / special_tokens_map.json
+             + tokenizer_c_norm.json（归一化模式 sidecar，记录模式名与 normalizer 链）
 
 CLI 用法：
     python tools/hf_export.py --json <model.json> --out <dir>
-        [--model-type Unigram] [--dry-run]
+        [--norm nfkc|nfc|reversible] [--model-type Unigram] [--dry-run]
         [--verify] [--model <model.tkm>] [--tok-cli <tok-cli.exe>]
         [--verify-file <sentences.txt>] [--verify-tolerance 0.02]
+        [--verify-offsets] [--verify-report <report.json>]
+
+--norm 语义（与 tok-cli encode --norm=... 同名同义）：
+    nfc         默认（自 2026-10-16）。严格 NFC（规范分解 + 规范排序 + 规范组合），不做兼容折叠；
+                全角标点/字母不再折成半角（tok_eval fidelity 失分的主因）。
+    nfkc        兼容模式。含 NFKC 兼容折叠（全角 -> 半角），有损，但与历史产出逐字节一致。
+    reversible  可逆口径（NFC + 仅把 \t/\n/\r 折叠为空格），encode -> decode 无损。
+    兼容别名：--norm-reversible 等价于 --norm=reversible；legacy/norm-reversible 等旧写法自动归一。
 
 退出码：
     0  成功（含 --verify 通过 / 差异在容差内）
@@ -42,6 +54,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 
 # --------------------------------------------------------------------------
 # 常量：与附件脚本 / C 端源码保持一致
@@ -71,6 +84,72 @@ BYTE_FALLBACK_SCORE = -10.0
 
 # 修复 6：C 端 normalize 的零宽族剔除清单（src/normalize.c）
 ZERO_WIDTH_CLASS = "[\u200b-\u200f\u2028-\u202f\u2060\ufeff\u00ad]"
+
+# 归一化模式：与 tok-cli encode --norm=... / src/normalize.h 的 NORM_MODE_* 一一对应
+# 默认归一化模式：自 2026-10-16 起为 nfc（不做兼容折叠）；nfkc 保留为可选兼容模式
+DEFAULT_NORM_MODE = "nfc"
+# 老 tok-cli（无 --norm 参数）内部固定 NFKC；仅 nfkc 模式下才省略 --norm，以兼容旧二进制
+LEGACY_CLI_DEFAULT_NORM = "nfkc"
+NORM_MODES = ("nfkc", "nfc", "reversible")
+NORM_MODE_ALIASES = {
+    "legacy": "nfkc", "legacy-nfkc": "nfkc", "nfkc-legacy": "nfkc",
+    "norm-nfkc": "nfkc", "norm-nfc": "nfc",
+    "norm-reversible": "reversible", "reversable": "reversible", "rev": "reversible",
+}
+
+
+def normalize_norm_mode(mode: str | None) -> str:
+    """把 --norm 输入（含旧别名）规范为 nfkc / nfc / reversible。"""
+    m = (mode or DEFAULT_NORM_MODE).strip().lower().replace("_", "-")
+    m = NORM_MODE_ALIASES.get(m, m)
+    if m not in NORM_MODES:
+        raise ValueError("--norm 非法：%s（可选 %s）" % (mode, "|".join(NORM_MODES)))
+    return m
+
+
+def normalizer_for_mode(mode: str) -> dict:
+    """返回该归一化模式对应的 tokenizer.json normalizer 配置。
+
+    nfc 为当前默认（DEFAULT_NORM_MODE，不做兼容折叠）；
+    nfkc 与原实现逐字节一致，既有产出仍可复现；
+    nfc / reversible 不做兼容折叠，因此不会把全角标点折成半角
+    （tok_eval 口径下 fidelity 失分的 88% 正来自该折叠）。
+    """
+    mode = normalize_norm_mode(mode)
+    if mode == "nfkc":
+        return {"type": "Sequence", "normalizers": [
+            {"type": "NFKC"},
+            {"type": "Replace", "pattern": {"Regex": "\\s"}, "content": " "},
+            {"type": "Replace", "pattern": {"Regex": ZERO_WIDTH_CLASS}, "content": ""}]}
+    if mode == "nfc":
+        return {"type": "Sequence", "normalizers": [
+            {"type": "NFC"},
+            {"type": "Replace", "pattern": {"Regex": "\\s"}, "content": " "},
+            {"type": "Replace", "pattern": {"Regex": ZERO_WIDTH_CLASS}, "content": ""}]}
+    # reversible：保留全角/非 ASCII 空白与零宽字符，只折叠控制类空白（\t\n\r）
+    return {"type": "Sequence", "normalizers": [
+        {"type": "NFC"},
+        {"type": "Replace", "pattern": {"Regex": "[\\t\\n\\r]"}, "content": " "}]}
+
+
+def expected_normalizer_types(mode: str) -> list:
+    return [n["type"] for n in normalizer_for_mode(mode)["normalizers"]]
+
+
+def check_normalizer_mode(cfg: dict, mode: str):
+    """判定 cfg 的 normalizer 是否与 --norm 一致。
+
+    返回 (ok, actual_types, expected_types)。判定口径为“与所选模式一致”，
+    而非历史实现的“必须 NFKC”。
+    """
+    mode = normalize_norm_mode(mode)
+    norm = cfg.get("normalizer")
+    actual = []
+    if isinstance(norm, dict):
+        actual = [n.get("type") for n in norm.get("normalizers", [])] or [norm.get("type")]
+    expect = expected_normalizer_types(mode)
+    ok = (isinstance(norm, dict) and norm.get("type") == "Sequence" and actual == expect)
+    return ok, actual, expect
 
 KNOWN_MODEL_TYPES = ("Unigram", "BPE", "WordPiece", "WordLevel")
 
@@ -121,8 +200,13 @@ def _normalize_input(cfg: dict) -> dict:
 # 体检（--dry-run 与正常流程共用）
 # --------------------------------------------------------------------------
 
-def diagnose(cfg: dict) -> list:
-    """体检：列出发现的问题项（每条含 id / severity / detail / fix）。"""
+def diagnose(cfg: dict, norm_mode: str = DEFAULT_NORM_MODE) -> list:
+    """体检：列出发现的问题项（每条含 id / severity / detail / fix）。
+
+    norm_mode：目标归一化模式。normalizer 一项的判定口径为
+    “是否与所选 --norm 期望的 normalizer 链一致”，不再是历史实现的“必须 NFKC”。
+    """
+    norm_mode = normalize_norm_mode(norm_mode)
     findings = []
 
     extra = [k for k in cfg.keys() if k not in ALLOWED_TOP_KEYS]
@@ -164,17 +248,14 @@ def diagnose(cfg: dict) -> list:
         })
 
     norm = cfg.get("normalizer")
-    norm_types = []
-    if isinstance(norm, dict):
-        norm_types = [n.get("type") for n in norm.get("normalizers", [])] or [norm.get("type")]
-    norm_ok = (isinstance(norm, dict) and norm.get("type") == "Sequence"
-               and norm_types[:3] == ["NFKC", "Replace", "Replace"])
+    norm_ok, norm_types, norm_expect = check_normalizer_mode(cfg, norm_mode)
     if not norm_ok:
         findings.append({
             "id": "normalizer_sequence", "severity": "semantic",
-            "detail": "normalizer 不是 Sequence[NFKC, Replace(\\s->\" \"), Replace(零宽族->\"\")]（当前 %s）"
-                      % (norm,),
-            "fix": "补 normalizer，与 src/normalize.c 的空白族/零宽族策略对齐",
+            "detail": "normalizer 与 --norm=%s 不一致（期望 Sequence[%s]，当前 %s）"
+                      % (norm_mode, ", ".join(norm_expect), norm),
+            "fix": "导出阶段按 --norm=%s 重建 normalizer（与 src/normalize.c 的"
+                   "兼容折叠/空白族/零宽族策略对齐）" % norm_mode,
         })
 
     vocab = cfg["model"]["vocab"]
@@ -208,10 +289,16 @@ def diagnose(cfg: dict) -> list:
 # 转换主体（等价于原脚本 patch()）
 # --------------------------------------------------------------------------
 
-def convert(cfg: dict, model_type: str | None = None):
-    """按 7 处修复生成 HF fast tokenizer 配置。返回 (cfg_out, stats, specials)。"""
+def convert(cfg: dict, model_type: str | None = None,
+            norm_mode: str = DEFAULT_NORM_MODE):
+    """按 7 处修复生成 HF fast tokenizer 配置。返回 (cfg_out, stats, specials)。
+
+    norm_mode：归一化模式（nfkc|nfc|reversible）；只影响修复 3（normalizer 链），
+    其余 6 处修复与历史行为逐字节一致。
+    """
+    norm_mode = normalize_norm_mode(norm_mode)
     cfg = _normalize_input(cfg)
-    findings = diagnose(cfg)
+    findings = diagnose(cfg, norm_mode=norm_mode)
 
     # 修复 6：剥离非标准顶层键，并把 specials 改写进 tokenizer_config.json
     specials = dict(DEFAULT_SPECIALS)
@@ -259,11 +346,16 @@ def convert(cfg: dict, model_type: str | None = None):
     cfg["pre_tokenizer"] = {"type": "Metaspace", "replacement": "\u2581",
                             "prepend_scheme": "never", "split": False}
 
-    # 修复 6：补 normalizer（NFKC + 空白族->空格 + 零宽族剔除）
-    cfg["normalizer"] = {"type": "Sequence", "normalizers": [
-        {"type": "NFKC"},
-        {"type": "Replace", "pattern": {"Regex": "\\s"}, "content": " "},
-        {"type": "Replace", "pattern": {"Regex": ZERO_WIDTH_CLASS}, "content": ""}]}
+    # 修复 6：补 normalizer（按 --norm 模式；nfkc 模式与原实现逐字节一致）
+    cfg["normalizer"] = normalizer_for_mode(norm_mode)
+    norm_ok, norm_actual, norm_expect = check_normalizer_mode(cfg, norm_mode)
+    if not norm_ok:
+        findings.append({
+            "id": "normalizer_mode_consistency", "severity": "hard",
+            "detail": "导出物 normalizer 与 --norm=%s 不一致（实际 Sequence[%s]，期望 Sequence[%s]）"
+                      % (norm_mode, ", ".join(norm_actual), ", ".join(norm_expect)),
+            "fix": "检查 normalizer_for_mode() 与 src/normalize.c 的模式映射",
+        })
 
     stats = {
         "pieces": len(vocab),
@@ -272,17 +364,29 @@ def convert(cfg: dict, model_type: str | None = None):
         "findings": findings,
         "specials": specials,
         "model_type": cfg["model"].get("type"),
+        "norm_mode": norm_mode,
+        "normalizer_types": norm_actual,
+        "normalizer_ok": norm_ok,
     }
     return cfg, stats, specials
 
 
-def write_outputs(cfg: dict, out_dir: str, specials: dict) -> dict:
-    """落盘 tokenizer.json / tokenizer_config.json / special_tokens_map.json。"""
+def write_outputs(cfg: dict, out_dir: str, specials: dict,
+                  norm_mode: str = DEFAULT_NORM_MODE,
+                  source_json: str | None = None) -> dict:
+    """落盘 tokenizer.json / tokenizer_config.json / special_tokens_map.json
+    + tokenizer_c_norm.json（归一化模式 sidecar：记录模式名与 normalizer 链，
+      供下游/评测核对口径；不会被 tokenizers/transformers 读取）。
+
+    norm_mode 默认 nfc（DEFAULT_NORM_MODE）；显式传 nfkc 仍可复现历史产出。
+    """
+    norm_mode = normalize_norm_mode(norm_mode)
     os.makedirs(out_dir, exist_ok=True)
     paths = {
         "tokenizer.json": os.path.join(out_dir, "tokenizer.json"),
         "tokenizer_config.json": os.path.join(out_dir, "tokenizer_config.json"),
         "special_tokens_map.json": os.path.join(out_dir, "special_tokens_map.json"),
+        "tokenizer_c_norm.json": os.path.join(out_dir, "tokenizer_c_norm.json"),
     }
     _write_json(paths["tokenizer.json"], cfg)
     _write_json(paths["tokenizer_config.json"], {
@@ -299,15 +403,29 @@ def write_outputs(cfg: dict, out_dir: str, specials: dict) -> dict:
         "eos_token": specials["eos_token"],
         "pad_token": specials["pad_token"],
     }, indent=2)
+    _write_json(paths["tokenizer_c_norm.json"], {
+        "generator": "tokenizer_c/tools/hf_export.py",
+        "norm_mode": norm_mode,
+        "normalizer_types": [n.get("type") for n in cfg["normalizer"]["normalizers"]],
+        "normalizer": cfg["normalizer"],
+        "source_json": os.path.abspath(source_json) if source_json else None,
+        "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "note": "norm_mode 与 tok-cli encode --norm=<mode> 对应；"
+                "nfc 为当前默认（不做兼容折叠）；nfkc 为兼容模式（有损，全角->半角）；"
+                "reversible 为可逆口径",
+    }, indent=2)
     return paths
 
 
-def patch(src_path: str, out_dir: str, model_type: str | None = None) -> dict:
-    """兼容原脚本签名的入口：patch(src, out_dir) -> 统计 dict。"""
-    cfg, stats, specials = convert(_read_json(src_path), model_type=model_type)
-    write_outputs(cfg, out_dir, specials)
+def patch(src_path: str, out_dir: str, model_type: str | None = None,
+          norm_mode: str = DEFAULT_NORM_MODE) -> dict:
+    """兼容原脚本签名的入口：patch(src, out_dir) -> 统计 dict（默认模式见 DEFAULT_NORM_MODE）。"""
+    cfg, stats, specials = convert(_read_json(src_path), model_type=model_type,
+                                   norm_mode=norm_mode)
+    write_outputs(cfg, out_dir, specials, norm_mode=norm_mode, source_json=src_path)
     return {"out_dir": out_dir, "pieces": stats["pieces"],
-            "null_fixed": stats["null_fixed"], "byte_added": stats["byte_added"]}
+            "null_fixed": stats["null_fixed"], "byte_added": stats["byte_added"],
+            "norm_mode": stats["norm_mode"]}
 
 
 # --------------------------------------------------------------------------
@@ -322,16 +440,22 @@ def _load_sentences(verify_file: str | None) -> list:
     return out or list(DEFAULT_SENTENCES)
 
 
-def _tok_cli_encode(tok_cli: str, model: str, text: str, tmp_dir: str) -> list:
-    """调用 C 路径 tok-cli encode --file，返回 id 列表（含负 id）。"""
+def _tok_cli_encode(tok_cli: str, model: str, text: str, tmp_dir: str,
+                    norm_arg: str = "") -> list:
+    """调用 C 路径 tok-cli encode --file，返回 id 列表（含负 id）。
+
+    norm_arg：形如 "--norm=reversible"；空串表示使用 tok-cli 的历史默认（NFKC）。
+    """
     os.makedirs(tmp_dir, exist_ok=True)
     fd, path = tempfile.mkstemp(prefix="sent_", suffix=".txt", dir=tmp_dir)
     os.close(fd)
     with io.open(path, "w", encoding="utf-8", newline="") as fp:
         fp.write(text)
     try:
-        proc = subprocess.run([tok_cli, "encode", "--model", model, "--file", path],
-                              capture_output=True)
+        cmd = [tok_cli, "encode", "--model", model, "--file", path]
+        if norm_arg:
+            cmd.append(norm_arg)
+        proc = subprocess.run(cmd, capture_output=True)
         if proc.returncode != 0:
             raise RuntimeError("tok-cli encode 失败: %s"
                                % proc.stderr.decode("utf-8", "replace").strip())
@@ -398,7 +522,8 @@ def _build_c_sim(conv_cfg: dict, pruned: set, tmp_dir: str):
 
 def verify(out_dir: str, json_path: str, model_path: str | None, tok_cli: str,
            verify_file: str | None = None, tolerance: float = 0.02,
-           tmp_dir: str | None = None, strict: bool = False) -> dict:
+           tmp_dir: str | None = None, strict: bool = False,
+           norm_mode: str = DEFAULT_NORM_MODE) -> dict:
     """真机校验：HF 侧加载 + 与 tok-cli encode 的 piece 级比对。
 
     C 端负 id 按 -1-byte 规则还原为 <0xXX> 后做 piece 级逐位对照
@@ -415,10 +540,17 @@ def verify(out_dir: str, json_path: str, model_path: str | None, tok_cli: str,
       unexplained    其余情况（既非剪枝机制、也非同分）—— 硬失败
 
     结论：PASS_LOAD_ONLY / PASS_IDENTICAL / PASS_KNOWN_DIFF / FAIL_TEXT /
-    FAIL_MISMATCH / FAIL_LOAD / FAIL_IMPORT。strict=True 时任何非 identical 即失败。
+    FAIL_MISMATCH / FAIL_LOAD / FAIL_IMPORT / FAIL_NORMALIZER_MODE。
+    strict=True 时任何非 identical 即失败。
     tolerance 仅用于报告 token 用量偏差是否超阈值，不参与判定。
+
+    norm_mode：先校验导出物 normalizer 与所选 --norm 是否一致（不一致直接判失败），
+    C 侧比对时除 nfkc（老二进制内建默认）外都会附加 tok-cli encode --norm=<mode>；
+    若 tok-cli 不支持该参数则整体降级为 PASS_LOAD_ONLY（老二进制不再中断流程）。
     """
-    result = {"out_dir": out_dir, "sentences": [], "load": {}, "verdict": None}
+    norm_mode = normalize_norm_mode(norm_mode)
+    result = {"out_dir": out_dir, "sentences": [], "load": {}, "verdict": None,
+              "norm_mode": norm_mode}
 
     try:
         from tokenizers import Tokenizer
@@ -441,13 +573,23 @@ def verify(out_dir: str, json_path: str, model_path: str | None, tok_cli: str,
         result["verdict"] = "FAIL_LOAD"
         return result
 
+    # 体检门禁：导出物 normalizer 必须与 --norm 一致，否则后续口径不可信
+    out_cfg = _read_json(os.path.join(out_dir, "tokenizer.json"))
+    norm_ok, norm_actual, norm_expect = check_normalizer_mode(out_cfg, norm_mode)
+    result["normalizer_match"] = norm_ok
+    result["normalizer_types"] = norm_actual
+    result["normalizer_expected"] = norm_expect
+    if not norm_ok:
+        result["verdict"] = "FAIL_NORMALIZER_MODE"
+        return result
+
     # C 侧 id -> piece 映射：id >= 0 用输入 json 的 vocab 下标（与 HF id 同序）；
     # id < 0 时按 C 端规则还原 <0xXX>
     raw_cfg = _read_json(json_path)
     base_vocab = _normalize_input(raw_cfg)["model"]["vocab"]
     base_scores = {p: s for p, s in base_vocab}
     pruned_pieces = set(p for p, s in base_vocab if s is None)
-    conv_cfg, _conv_stats, _specials = convert(raw_cfg)
+    conv_cfg, _conv_stats, _specials = convert(raw_cfg, norm_mode=norm_mode)
     score_map = {p: s for p, s in conv_cfg["model"]["vocab"]}
     sim_state = {"tk": None, "id2p": None, "error": None}
 
@@ -495,6 +637,8 @@ def verify(out_dir: str, json_path: str, model_path: str | None, tok_cli: str,
     csim_reproduced = 0
     over_tol = []
     tmp_work = tmp_dir or tempfile.gettempdir()
+    norm_arg = "" if norm_mode == LEGACY_CLI_DEFAULT_NORM else "--norm=%s" % norm_mode
+    result["tok_cli_norm_arg"] = norm_arg or "(tok-cli 默认)"
     for sent in _load_sentences(verify_file):
         row = {"text": sent}
         hf_ids = tk.encode(sent).ids
@@ -506,7 +650,18 @@ def verify(out_dir: str, json_path: str, model_path: str | None, tok_cli: str,
             row["note"] = "未提供 tok-cli 或 .tkm，跳过 C 侧比对"
             result["sentences"].append(row)
             continue
-        c_ids = _tok_cli_encode(tok_cli, model_path, sent, tmp_work)
+        try:
+            c_ids = _tok_cli_encode(tok_cli, model_path, sent, tmp_work, norm_arg)
+        except RuntimeError as exc:
+            # tok-cli 不支持该 --norm（旧二进制）或调用失败：整体降级为仅加载校验
+            result["c_cli_available"] = False
+            result["c_cli_reason"] = ("%s（--norm=%s 需支持该模式的 tok-cli，"
+                                      "请按 scripts/build.ps1 重建）" % (exc, norm_mode))
+            row["c_tokens"] = None
+            row["diff_kind"] = "skipped"
+            row["note"] = result["c_cli_reason"]
+            result["sentences"].append(row)
+            continue
         c_pieces = [c_id_to_piece(i) for i in c_ids]
         row["c_tokens"] = len(c_ids)
         row["c_negative_ids"] = sum(1 for i in c_ids if i < 0)
@@ -596,7 +751,14 @@ def main(argv=None) -> int:
         prog="hf_export.py",
         description="tokenizer_c 模型 JSON -> HuggingFace fast tokenizer 目录")
     ap.add_argument("--json", required=True, help="输入 model json（tok-cli train --json 产物）")
-    ap.add_argument("--out", required=True, help="输出目录（tokenizer.json 等三个文件）")
+    ap.add_argument("--out", required=True,
+                    help="输出目录（tokenizer.json 等四个文件，含 tokenizer_c_norm.json sidecar）")
+    ap.add_argument("--norm", default=DEFAULT_NORM_MODE,
+                    help="归一化模式 %s（默认 %s；nfkc 为兼容模式，可复现历史产出；"
+                         "兼容别名 legacy/norm-reversible 等）"
+                         % ("|".join(NORM_MODES), DEFAULT_NORM_MODE))
+    ap.add_argument("--norm-reversible", action="store_true",
+                    help="兼容别名：等价于 --norm=reversible")
     ap.add_argument("--model-type", default=None,
                     help="可选覆盖 model.type（%s）" % "/".join(KNOWN_MODEL_TYPES))
     ap.add_argument("--dry-run", action="store_true", help="只体检不写盘，列出问题项与修复项")
@@ -609,7 +771,17 @@ def main(argv=None) -> int:
     ap.add_argument("--strict", action="store_true",
                     help="严格模式：任何非逐 piece 一致即判定失败（CI 用）")
     ap.add_argument("--tmp-dir", default=None, help="校验时的临时句子文件目录")
+    ap.add_argument("--verify-offsets", action="store_true",
+                    help="校验后追加 byte fallback offset 契约审计（tools/byte_offsets.py）")
+    ap.add_argument("--verify-report", default=None,
+                    help="把 verify 结果 JSON 落盘（证据留档）")
     args = ap.parse_args(argv)
+
+    try:
+        norm_mode = normalize_norm_mode("reversible" if args.norm_reversible else args.norm)
+    except ValueError as exc:
+        print("[FAIL] %s" % exc)
+        return 1
 
     if args.model_type and args.model_type not in KNOWN_MODEL_TYPES:
         print("[FAIL] --model-type 非法：%s（可选 %s）"
@@ -625,26 +797,33 @@ def main(argv=None) -> int:
 
     try:
         cfg_in = _read_json(args.json)
-        cfg, stats, specials = convert(cfg_in, model_type=args.model_type)
+        cfg, stats, specials = convert(cfg_in, model_type=args.model_type,
+                                       norm_mode=norm_mode)
     except Exception as exc:  # noqa: BLE001
         print("[FAIL] 解析/转换失败：%s: %s" % (type(exc).__name__, exc))
         return 1
 
+    print("== 归一化模式 == --norm=%s（normalizer = Sequence[%s]）"
+          % (norm_mode, ", ".join(expected_normalizer_types(norm_mode))))
     print("== 体检 ==")
     if not stats["findings"]:
         print("  未发现问题项")
     for f in stats["findings"]:
         print("  [%s] %s\n        修复: %s" % (f["severity"], f["detail"], f["fix"]))
-    print("== 修复统计 == pieces=%d null_fixed=%d byte_added=%d model_type=%s"
-          % (stats["pieces"], stats["null_fixed"], stats["byte_added"], stats["model_type"]))
+    print("== 修复统计 == pieces=%d null_fixed=%d byte_added=%d model_type=%s "
+          "norm_mode=%s normalizer_ok=%s"
+          % (stats["pieces"], stats["null_fixed"], stats["byte_added"], stats["model_type"],
+             stats["norm_mode"], stats["normalizer_ok"]))
 
     if args.dry_run:
         print("[DRY-RUN] 未写盘。计划输出：")
-        for name in ("tokenizer.json", "tokenizer_config.json", "special_tokens_map.json"):
+        for name in ("tokenizer.json", "tokenizer_config.json", "special_tokens_map.json",
+                     "tokenizer_c_norm.json"):
             print("  %s" % os.path.join(args.out, name))
         return 0
 
-    paths = write_outputs(cfg, args.out, specials)
+    paths = write_outputs(cfg, args.out, specials, norm_mode=norm_mode,
+                          source_json=args.json)
     for name, p in paths.items():
         print("  写入 %s (%d bytes)" % (p, os.path.getsize(p)))
 
@@ -655,11 +834,29 @@ def main(argv=None) -> int:
     res = verify(args.out, args.json, args.model, tok_cli,
                  verify_file=args.verify_file,
                  tolerance=args.verify_tolerance,
-                 tmp_dir=args.tmp_dir, strict=args.strict)
+                 tmp_dir=args.tmp_dir, strict=args.strict, norm_mode=norm_mode)
+    if args.verify_offsets:
+        try:
+            res["offset_contract"] = verify_offsets(args.out)
+        except Exception as exc:  # noqa: BLE001
+            res["offset_contract"] = {"error": "%s: %s" % (type(exc).__name__, exc)}
+    if args.verify_report:
+        _write_json(args.verify_report, res, indent=2)
+        print("  校验报告: %s" % args.verify_report)
     print("  加载: %s" % json.dumps(res["load"], ensure_ascii=False))
     if not res["load"].get("ok"):
         print("[FAIL] 产出目录无法被 HF 加载")
         return 2
+    if res.get("verdict") == "FAIL_NORMALIZER_MODE":
+        print("[FAIL] 导出物 normalizer 与 --norm=%s 不一致：实际 Sequence[%s]，期望 Sequence[%s]"
+              % (norm_mode, ", ".join(res.get("normalizer_types") or []),
+                 ", ".join(res.get("normalizer_expected") or [])))
+        return 3
+    print("  normalizer: 实际 Sequence[%s] / 期望 Sequence[%s] → match=%s；"
+          "tok-cli 模式参数=%s"
+          % (", ".join(res.get("normalizer_types") or []),
+             ", ".join(res.get("normalizer_expected") or []),
+             res.get("normalizer_match"), res.get("tok_cli_norm_arg")))
     print("  tok-cli: %s | model: %s" % (res["tok_cli"], res["model"]))
     print("  源 json 剪枝(score=null) piece 数: %d" % res["pruned_piece_count"])
     for row in res["sentences"]:
@@ -695,10 +892,28 @@ def main(argv=None) -> int:
     if res["delta_over_tolerance"]:
         print("  提示: 第 %s 条样本 token 用量偏差超提示阈值 %.4f%%（仅提示，不参与判定）"
               % (res["delta_over_tolerance"], res["tolerance_pct"]))
+    if res.get("offset_contract") is not None:
+        oc = res["offset_contract"]
+        print("  offset 契约审计: byte_groups=%s shared_span_groups=%s contract_ok=%s"
+              % (oc.get("byte_groups"), oc.get("shared_span_groups"), oc.get("contract_ok")))
     if res["verdict"] == "PASS_KNOWN_DIFF":
         print("  说明: 差异全部归因于已核实机制（剪枝 piece 在 HF 端仍可匹配 / 同分不同切分），"
               "两侧还原文本无损；细节见 tokenizer_c/docs/hf_export_pipeline.md")
     return 0 if res["verdict"].startswith("PASS") else 3
+
+
+# --------------------------------------------------------------------------
+# byte fallback offset 契约（委托 tools/byte_offsets.py）
+# --------------------------------------------------------------------------
+
+def verify_offsets(out_dir: str, texts: list | None = None) -> dict:
+    """对导出目录做 byte fallback offset 契约审计（见 tools/byte_offsets.py）。"""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import byte_offsets  # noqa: PLC0415
+    if not texts:
+        texts = list(DEFAULT_SENTENCES)
+    tk_path = os.path.join(out_dir, "tokenizer.json")
+    return byte_offsets.audit_file(tk_path, texts)
 
 
 if __name__ == "__main__":

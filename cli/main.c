@@ -6,6 +6,7 @@
  *   decode  --model <file> --ids <id,id,...>
  */
 #include "tokenizer.h"
+#include "tiktoken_bpe.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,6 +14,8 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#include <io.h>
+#include <fcntl.h>
 #endif
 
 /* Windows: command-line arguments arrive in the system ANSI code page (e.g.
@@ -64,6 +67,36 @@ static int cli_file_size64(FILE *fp, long long *out) {
 
 static const char *g_prog = "tok-cli";
 
+/* stdout binary-mode guard (Windows).
+ *
+ * The Windows CRT opens stdout in text mode, so every '\n' written through it
+ * becomes "\r\n" on the way to a console, a pipe or a redirected file. That
+ * is fine for the human-readable subcommands, but tt-decode --raw promises
+ * the exact byte string produced by ttbpe_decode_bytes() (so that it can be
+ * compared byte-for-byte against tiktoken's Encoding.decode_bytes()); text
+ * mode both expands the payload's own newlines and appends bytes of its own.
+ * The raw path therefore flushes, switches the fd to binary for the duration
+ * of the write, and restores the previous mode afterwards so the other
+ * subcommands keep their existing behavior. On POSIX both helpers are no-ops
+ * because text/binary translation does not exist there. */
+static int tt_stdout_binary_begin(void) {
+#ifdef _WIN32
+    fflush(stdout);
+    return _setmode(_fileno(stdout), _O_BINARY);
+#else
+    return 0;
+#endif
+}
+
+static void tt_stdout_binary_end(int prev_mode) {
+#ifdef _WIN32
+    fflush(stdout);
+    if (prev_mode != -1) _setmode(_fileno(stdout), prev_mode);
+#else
+    (void)prev_mode;
+#endif
+}
+
 static void usage(void) {
     fprintf(stderr,
         "Usage:\n"
@@ -78,6 +111,15 @@ static void usage(void) {
         "  %s bench  --model <file> (--file <f> | --list <paths.txt>)"
         " [--repeat N] [--decode-cap N]\n"
         "             [--norm=nfkc|nfc|reversible] [--segment-rules] [--byte-real]\n"
+        "  %s tt-encode --vocab <file> (--text <s> | --file <f>)\n"
+        "             [--split=none|gpt2|cl100k] [--ordinary] [--allow-special]\n"
+        "             [--special <tok>] [--repeat N] [--ids-only]\n"
+        "  %s tt-decode --vocab <file> --ids <id,id,...> [--raw]\n"
+        "             (--raw = exact decode_bytes() payload on a binary-mode\n"
+        "              stdout, no trailing newline; default is text + \\n)\n"
+        "  %s tt-split  --vocab <file> (--text <s> | --file <f>) [--split=...]\n"
+        "             one JSON-escaped piece per line\n"
+        "  %s tt-info   --vocab <file>\n"
         "    inference overrides (applied after load, for re-evaluating an\n"
         "    already-trained model without a retrain):\n"
         "      --norm=<mode>      normalization mode (2026-10-14):\n"
@@ -87,7 +129,7 @@ static void usage(void) {
         "      --norm-reversible  alias of --norm=reversible (P0-1)\n"
         "      --segment-rules    digit 3-grouping + operator isolation (P1-6)\n"
         "      --byte-real        emit real <0xXX> piece ids (P1-4)\n",
-        g_prog, g_prog, g_prog, g_prog);
+        g_prog, g_prog, g_prog, g_prog, g_prog, g_prog, g_prog, g_prog);
 }
 
 static const char *arg_value(int argc, char **argv, int i, const char *opt,
@@ -664,6 +706,472 @@ static int run_bench(int argc, char **argv) {
     return 0;
 }
 
+/* ------------------------------------------------------------------ */
+/* tt-* : tiktoken-compatible byte-level BPE (tiktoken_bpe module)      */
+/*                                                                     */
+/*   tt-encode --vocab <file> (--text <s> | --file <f>)                */
+/*             [--split=none|gpt2|cl100k] [--ordinary]                 */
+/*             [--allow-special] [--special <tok>] [--repeat N]        */
+/*             [--ids-only]                                            */
+/*   tt-decode --vocab <file> --ids <id,id,...> [--raw]                */
+/*   tt-split  --vocab <file> (--text <s> | --file <f>) [--split=...]  */
+/*   tt-info   --vocab <file>                                          */
+/*                                                                     */
+/* Default encode semantics == tiktoken Encoding.encode(); --ordinary   */
+/* == encode_ordinary(); --allow-special == allow_all_special=True;     */
+/* --split=none == _encode_single_piece (no pre-tokenization).          */
+/* ------------------------------------------------------------------ */
+
+static int tt_parse_split_mode(const char *v, int *out) {
+    if (!v) return -1;
+    if (strcmp(v, "none") == 0 || strcmp(v, "single") == 0) {
+        *out = TTBPE_SPLIT_NONE;
+        return 0;
+    }
+    if (strcmp(v, "gpt2") == 0 || strcmp(v, "r50k") == 0) {
+        *out = TTBPE_SPLIT_GPT2;
+        return 0;
+    }
+    if (strcmp(v, "cl100k") == 0 || strcmp(v, "o200k") == 0) {
+        *out = TTBPE_SPLIT_CL100K;
+        return 0;
+    }
+    return -1;
+}
+
+static const char *tt_split_name(int mode) {
+    switch (mode) {
+        case TTBPE_SPLIT_NONE:   return "none";
+        case TTBPE_SPLIT_GPT2:   return "gpt2";
+        case TTBPE_SPLIT_CL100K: return "cl100k";
+        default:                 return "unknown";
+    }
+}
+
+/* space/comma separated id list -> malloc'ed array (caller frees) */
+static int tt_parse_ids(const char *s, int **out_ids, size_t *out_n) {
+    size_t cap = strlen(s) / 2 + 8;
+    int *ids = (int *)malloc(cap * sizeof(int));
+    if (!ids) return -1;
+    size_t n = 0;
+    const char *p = s;
+    while (*p) {
+        while (*p == ' ' || *p == ',' || *p == '\n' || *p == '\t' || *p == '\r')
+            p++;
+        if (!*p) break;
+        char *end = NULL;
+        long v = strtol(p, &end, 10);
+        if (end == p) {
+            free(ids);
+            return -1;
+        }
+        if (n >= cap) {
+            size_t ncap = cap * 2;
+            int *nids = (int *)realloc(ids, ncap * sizeof(int));
+            if (!nids) {
+                free(ids);
+                return -1;
+            }
+            ids = nids;
+            cap = ncap;
+        }
+        ids[n++] = (int)v;
+        p = end;
+    }
+    *out_ids = ids;
+    *out_n = n;
+    return 0;
+}
+
+/* JSON string body (without the surrounding quotes) for arbitrary bytes. */
+static void tt_json_write(const unsigned char *p, size_t n) {
+    putchar('"');
+    for (size_t i = 0; i < n; i++) {
+        unsigned char c = p[i];
+        if (c == '\\' || c == '"') {
+            putchar('\\');
+            putchar((char)c);
+        } else if (c == '\n') {
+            fputs("\\n", stdout);
+        } else if (c == '\r') {
+            fputs("\\r", stdout);
+        } else if (c == '\t') {
+            fputs("\\t", stdout);
+        } else if (c < 0x20 || c == 0x7f) {
+            printf("\\u%04x", (unsigned)c);
+        } else {
+            putchar((char)c);
+        }
+    }
+    putchar('"');
+}
+
+static void tt_report_error(const char *what) {
+    fprintf(stderr, "%s failed: %s\n", what,
+            ttbpe_last_error() ? ttbpe_last_error() : "unknown");
+}
+
+static int run_tt_encode(int argc, char **argv) {
+    const char *vocab = NULL, *text = NULL, *file = NULL;
+    const char *specials[8];
+    size_t special_lens[8];
+    int nspecials = 0;
+    int split_mode = TTBPE_SPLIT_CL100K;
+    int ordinary = 0, allow_special = 0, ids_only = 0, repeat = 1;
+    for (int i = 0; i < argc; i++) {
+        int next = i + 1;
+        const char *v = NULL;
+        if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
+            usage();
+            return 0;
+        }
+        if (strcmp(argv[i], "--vocab") == 0) {
+            v = arg_value(argc, argv, i, "--vocab", &next);
+            if (!v) return 1;
+            vocab = v;
+        } else if (strcmp(argv[i], "--text") == 0) {
+            v = arg_value(argc, argv, i, "--text", &next);
+            if (!v) return 1;
+            text = v;
+        } else if (strcmp(argv[i], "--file") == 0) {
+            v = arg_value(argc, argv, i, "--file", &next);
+            if (!v) return 1;
+            file = v;
+        } else if (strncmp(argv[i], "--split=", 8) == 0) {
+            if (tt_parse_split_mode(argv[i] + 8, &split_mode) != 0) {
+                fprintf(stderr, "tt-encode: unknown split mode '%s' "
+                                "(expected none|gpt2|cl100k)\n", argv[i] + 8);
+                return 1;
+            }
+        } else if (strcmp(argv[i], "--split") == 0) {
+            v = arg_value(argc, argv, i, "--split", &next);
+            if (!v) return 1;
+            if (tt_parse_split_mode(v, &split_mode) != 0) {
+                fprintf(stderr, "tt-encode: unknown split mode '%s' "
+                                "(expected none|gpt2|cl100k)\n", v);
+                return 1;
+            }
+        } else if (strcmp(argv[i], "--ordinary") == 0) {
+            ordinary = 1;
+        } else if (strcmp(argv[i], "--allow-special") == 0) {
+            allow_special = 1;
+        } else if (strcmp(argv[i], "--ids-only") == 0) {
+            ids_only = 1;
+        } else if (strcmp(argv[i], "--special") == 0) {
+            v = arg_value(argc, argv, i, "--special", &next);
+            if (!v) return 1;
+            if (nspecials < 8) {
+                specials[nspecials] = v;
+                special_lens[nspecials] = strlen(v);
+                nspecials++;
+            }
+        } else if (strcmp(argv[i], "--repeat") == 0) {
+            v = arg_value(argc, argv, i, "--repeat", &next);
+            if (!v) return 1;
+            repeat = atoi(v);
+        } else {
+            fprintf(stderr, "unknown tt-encode option: %s\n", argv[i]);
+            return 1;
+        }
+        i = next - 1;
+    }
+    if (!vocab || (!text && !file)) {
+        fprintf(stderr, "tt-encode requires --vocab and (--text | --file)\n");
+        return 1;
+    }
+    if (repeat < 1) repeat = 1;
+
+    tiktoken_bpe_t *tt = ttbpe_load(vocab);
+    if (!tt) {
+        tt_report_error("tt-encode load");
+        return 1;
+    }
+    for (int i = 0; i < nspecials; i++) {
+        if (ttbpe_add_special(tt, specials[i], special_lens[i]) != 0) {
+            tt_report_error("tt-encode add_special");
+            ttbpe_free(tt);
+            return 1;
+        }
+    }
+    if (ttbpe_set_split_mode(tt, split_mode) != 0) {
+        tt_report_error("tt-encode set_split_mode");
+        ttbpe_free(tt);
+        return 1;
+    }
+    char *content = NULL;
+    size_t clen = 0;
+    int owns_content = 0;
+    if (text) {
+        content = (char *)text;
+        clen = strlen(text);
+    } else if (bench_read_file(file, &content, &clen) != 0) {
+        fprintf(stderr, "tt-encode: cannot read %s\n", file);
+        ttbpe_free(tt);
+        return 1;
+    } else {
+        owns_content = 1;
+    }
+
+    int *ids = NULL;
+    size_t n = 0;
+    double total_ms = 0.0;
+    for (int r = 0; r < repeat; r++) {
+        ttbpe_free_ids(ids);
+        ids = NULL;
+        n = 0;
+        double t0 = bench_now_ms();
+        int rc;
+        if (ordinary)
+            rc = ttbpe_encode_ordinary(tt, content, clen, &ids, &n);
+        else if (allow_special)
+            rc = ttbpe_encode_ex(tt, content, clen, 1, 1, &ids, &n);
+        else
+            rc = ttbpe_encode(tt, content, clen, &ids, &n);
+        total_ms += bench_now_ms() - t0;
+        if (rc != 0) {
+            tt_report_error("tt-encode encode");
+            if (owns_content) free(content);
+            ttbpe_free(tt);
+            return 1;
+        }
+    }
+    for (size_t i = 0; i < n; i++) {
+        if (i) putchar(' ');
+        printf("%d", ids[i]);
+    }
+    putchar('\n');
+    if (!ids_only) {
+        double per = total_ms / (double)repeat;
+        fprintf(stderr, "tt-encode: vocab=%s format=%s split=%s specials=%d "
+                        "bytes=%llu tokens=%llu repeat=%d total_ms=%.3f "
+                        "ms_per_pass=%.3f mb_per_s=%.3f\n",
+                vocab, ttbpe_format(tt), tt_split_name(split_mode), nspecials,
+                (unsigned long long)clen, (unsigned long long)n, repeat,
+                total_ms, per,
+                per > 0 ? ((double)clen / (per / 1000.0)) / (1024.0 * 1024.0)
+                        : 0.0);
+    }
+    ttbpe_free_ids(ids);
+    if (owns_content) free(content);
+    ttbpe_free(tt);
+    return 0;
+}
+
+static int run_tt_decode(int argc, char **argv) {
+    const char *vocab = NULL, *ids_str = NULL;
+    int raw = 0;
+    for (int i = 0; i < argc; i++) {
+        int next = i + 1;
+        const char *v = NULL;
+        if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
+            usage();
+            return 0;
+        }
+        if (strcmp(argv[i], "--vocab") == 0) {
+            v = arg_value(argc, argv, i, "--vocab", &next);
+            if (!v) return 1;
+            vocab = v;
+        } else if (strcmp(argv[i], "--ids") == 0) {
+            v = arg_value(argc, argv, i, "--ids", &next);
+            if (!v) return 1;
+            ids_str = v;
+        } else if (strcmp(argv[i], "--raw") == 0) {
+            raw = 1;
+        } else {
+            fprintf(stderr, "unknown tt-decode option: %s\n", argv[i]);
+            return 1;
+        }
+        i = next - 1;
+    }
+    if (!vocab || !ids_str) {
+        fprintf(stderr, "tt-decode requires --vocab and --ids\n");
+        return 1;
+    }
+    int *ids = NULL;
+    size_t n = 0;
+    if (tt_parse_ids(ids_str, &ids, &n) != 0) {
+        fprintf(stderr, "tt-decode: cannot parse --ids '%s'\n", ids_str);
+        return 1;
+    }
+    tiktoken_bpe_t *tt = ttbpe_load(vocab);
+    if (!tt) {
+        free(ids);
+        tt_report_error("tt-decode load");
+        return 1;
+    }
+    if (raw) {
+        unsigned char *bytes = NULL;
+        size_t blen = 0;
+        if (ttbpe_decode_bytes(tt, ids, n, &bytes, &blen) != 0) {
+            free(ids);
+            ttbpe_free(tt);
+            tt_report_error("tt-decode decode_bytes");
+            return 1;
+        }
+        /* --raw: emit exactly the bytes ttbpe_decode_bytes() produced, with
+         * nothing added -- no trailing newline, no text-mode newline
+         * translation -- so the output is byte-identical to tiktoken's
+         * Encoding.decode_bytes() for the same ids. */
+        int prev_mode = tt_stdout_binary_begin();
+        fwrite(bytes, 1, blen, stdout);
+        tt_stdout_binary_end(prev_mode);
+        ttbpe_free_buf(bytes);
+    } else {
+        char *text = NULL;
+        size_t tlen = 0;
+        if (ttbpe_decode(tt, ids, n, &text, &tlen) != 0) {
+            free(ids);
+            ttbpe_free(tt);
+            tt_report_error("tt-decode decode");
+            return 1;
+        }
+        fwrite(text, 1, tlen, stdout);
+        fputc('\n', stdout);
+        ttbpe_free_buf(text);
+    }
+    free(ids);
+    ttbpe_free(tt);
+    return 0;
+}
+
+static int run_tt_split(int argc, char **argv) {
+    const char *vocab = NULL, *text = NULL, *file = NULL;
+    int split_mode = TTBPE_SPLIT_CL100K;
+    for (int i = 0; i < argc; i++) {
+        int next = i + 1;
+        const char *v = NULL;
+        if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
+            usage();
+            return 0;
+        }
+        if (strcmp(argv[i], "--vocab") == 0) {
+            v = arg_value(argc, argv, i, "--vocab", &next);
+            if (!v) return 1;
+            vocab = v;
+        } else if (strcmp(argv[i], "--text") == 0) {
+            v = arg_value(argc, argv, i, "--text", &next);
+            if (!v) return 1;
+            text = v;
+        } else if (strcmp(argv[i], "--file") == 0) {
+            v = arg_value(argc, argv, i, "--file", &next);
+            if (!v) return 1;
+            file = v;
+        } else if (strncmp(argv[i], "--split=", 8) == 0) {
+            if (tt_parse_split_mode(argv[i] + 8, &split_mode) != 0) {
+                fprintf(stderr, "tt-split: unknown split mode '%s' "
+                                "(expected none|gpt2|cl100k)\n", argv[i] + 8);
+                return 1;
+            }
+        } else if (strcmp(argv[i], "--split") == 0) {
+            v = arg_value(argc, argv, i, "--split", &next);
+            if (!v) return 1;
+            if (tt_parse_split_mode(v, &split_mode) != 0) {
+                fprintf(stderr, "tt-split: unknown split mode '%s' "
+                                "(expected none|gpt2|cl100k)\n", v);
+                return 1;
+            }
+        } else {
+            fprintf(stderr, "unknown tt-split option: %s\n", argv[i]);
+            return 1;
+        }
+        i = next - 1;
+    }
+    if (!vocab || (!text && !file)) {
+        fprintf(stderr, "tt-split requires --vocab and (--text | --file)\n");
+        return 1;
+    }
+    tiktoken_bpe_t *tt = ttbpe_load(vocab);
+    if (!tt) {
+        tt_report_error("tt-split load");
+        return 1;
+    }
+    if (ttbpe_set_split_mode(tt, split_mode) != 0) {
+        tt_report_error("tt-split set_split_mode");
+        ttbpe_free(tt);
+        return 1;
+    }
+    char *content = NULL;
+    size_t clen = 0;
+    int owns_content = 0;
+    if (text) {
+        content = (char *)text;
+        clen = strlen(text);
+    } else if (bench_read_file(file, &content, &clen) != 0) {
+        fprintf(stderr, "tt-split: cannot read %s\n", file);
+        ttbpe_free(tt);
+        return 1;
+    } else {
+        owns_content = 1;
+    }
+    ttbpe_piece *pieces = NULL;
+    size_t np = 0;
+    if (ttbpe_split(tt, content, clen, &pieces, &np) != 0) {
+        tt_report_error("tt-split split");
+        if (owns_content) free(content);
+        ttbpe_free(tt);
+        return 1;
+    }
+    for (size_t i = 0; i < np; i++) {
+        tt_json_write((const unsigned char *)pieces[i].ptr, pieces[i].len);
+        putchar('\n');
+    }
+    fprintf(stderr, "tt-split: vocab=%s format=%s word_split=%s split=%s "
+                    "pieces=%llu bytes=%llu\n",
+            vocab, ttbpe_format(tt),
+            ttbpe_word_split(tt) ? ttbpe_word_split(tt) : "(none)",
+            tt_split_name(split_mode), (unsigned long long)np,
+            (unsigned long long)clen);
+    ttbpe_free_pieces(pieces);
+    if (owns_content) free(content);
+    ttbpe_free(tt);
+    return 0;
+}
+
+static int run_tt_info(int argc, char **argv) {
+    const char *vocab = NULL;
+    for (int i = 0; i < argc; i++) {
+        int next = i + 1;
+        const char *v = NULL;
+        if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
+            usage();
+            return 0;
+        }
+        if (strcmp(argv[i], "--vocab") == 0) {
+            v = arg_value(argc, argv, i, "--vocab", &next);
+            if (!v) return 1;
+            vocab = v;
+        } else {
+            fprintf(stderr, "unknown tt-info option: %s\n", argv[i]);
+            return 1;
+        }
+        i = next - 1;
+    }
+    if (!vocab) {
+        fprintf(stderr, "tt-info requires --vocab\n");
+        return 1;
+    }
+    tiktoken_bpe_t *tt = ttbpe_load(vocab);
+    if (!tt) {
+        tt_report_error("tt-info load");
+        return 1;
+    }
+    printf("{\"vocab\": ");
+    tt_json_write((const unsigned char *)vocab, strlen(vocab));
+    printf(", \"format\": \"%s\", \"vocab_size\": %llu, \"special_count\": %llu,"
+           " \"word_split\": ",
+           ttbpe_format(tt),
+           (unsigned long long)ttbpe_vocab_size(tt),
+           (unsigned long long)ttbpe_special_count(tt));
+    const char *ws = ttbpe_word_split(tt);
+    if (ws)
+        tt_json_write((const unsigned char *)ws, strlen(ws));
+    else
+        fputs("null", stdout);
+    printf(", \"default_split\": \"cl100k\", \"decode_errors\": \"replace\"}\n");
+    ttbpe_free(tt);
+    return 0;
+}
+
 int main(int argc, char **argv) {
 #ifdef _WIN32
     char **utf8_argv = win32_argv_to_utf8(&argc);
@@ -679,6 +1187,14 @@ int main(int argc, char **argv) {
     else if (strcmp(argv[1], "encode") == 0) rc = run_encode(argc - 2, argv + 2);
     else if (strcmp(argv[1], "decode") == 0) rc = run_decode(argc - 2, argv + 2);
     else if (strcmp(argv[1], "bench") == 0) rc = run_bench(argc - 2, argv + 2);
+    else if (strcmp(argv[1], "tt-encode") == 0)
+        rc = run_tt_encode(argc - 2, argv + 2);
+    else if (strcmp(argv[1], "tt-decode") == 0)
+        rc = run_tt_decode(argc - 2, argv + 2);
+    else if (strcmp(argv[1], "tt-split") == 0)
+        rc = run_tt_split(argc - 2, argv + 2);
+    else if (strcmp(argv[1], "tt-info") == 0)
+        rc = run_tt_info(argc - 2, argv + 2);
     else if (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0) {
         usage();
         rc = 0;
